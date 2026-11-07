@@ -26,12 +26,20 @@
 #define BOT_LOG_SIZE               32     // event log ring buffer ("bot log"), RAM only
 #define BOT_LOG_MSG_LEN            80
 
+// Contacts that have DM'd the bot successfully (or were added with "bot learn") are saved to
+// flash, so they survive reboots and don't depend on adverts, which often don't travel far.
+// FIFO: a new entry replaces the oldest; a contact already saved costs no write.
+#define BOT_CACHE_FILE  "/bot_cache"
+#define BOT_CACHE_SIZE             16
+#define BOT_CACHE_NAME_LEN         24
+
 struct BotContact {
   mesh::Identity id;
   uint8_t secret[PUB_KEY_SIZE];
   uint8_t out_path[MAX_PATH_SIZE];
   uint8_t out_path_len;          // OUT_PATH_UNKNOWN until the sender tells us a path
   bool has_secret;
+  bool cached;                   // saved in the flash contact cache
   uint32_t last_heard;           // RTC secs, for eviction
   uint32_t last_msg_timestamp;   // sender timestamp of last message answered (dedupe retries)
   uint32_t last_reply_secs;
@@ -46,6 +54,11 @@ struct BotPendingReply {
   uint32_t timestamp;            // reused by the flood resend, so the sender can de-dupe
   uint32_t expected_ack;
   char text[BOT_REPLY_MAX_LEN + 1];
+};
+
+struct BotCacheEntry {
+  uint8_t pub_key[PUB_KEY_SIZE];
+  char name[BOT_CACHE_NAME_LEN];
 };
 
 struct BotLogEntry {

@@ -141,8 +141,9 @@ void MyMesh::sendBotAdvert(bool flood, uint32_t delay_millis) {
   }
 }
 
-void MyMesh::botLearnContact(const mesh::Identity& id, const char* name) {
-  if (id.matches(bot_id) || id.matches(self_id)) return;
+// Adds/refreshes a contact in the RAM table. Returns its index, or -1.
+int MyMesh::botLearnContact(const mesh::Identity& id, const char* name) {
+  if (id.matches(bot_id) || id.matches(self_id)) return -1;
 
   uint32_t now = getRTCClock()->getCurrentTime();
   int idx = -1;
@@ -152,16 +153,21 @@ void MyMesh::botLearnContact(const mesh::Identity& id, const char* name) {
   if (idx < 0) {
     if (num_bot_contacts < BOT_MAX_CONTACTS) {
       idx = num_bot_contacts++;
-    } else {   // evict the least recently heard contact that has no reply in flight
-      uint32_t oldest = 0xFFFFFFFF;
-      for (int i = 0; i < num_bot_contacts; i++) {
-        bool busy = false;
-        for (int j = 0; j < BOT_MAX_PENDING; j++) {
-          if (bot_pending[j].active && bot_pending[j].contact_idx == i) busy = true;
+    } else {
+      // evict the least recently heard contact that has no reply in flight, preferring ones that
+      // are not in the flash cache (those are people who actually use the bot)
+      for (int pass = 0; pass < 2 && idx < 0; pass++) {
+        uint32_t oldest = 0xFFFFFFFF;
+        for (int i = 0; i < num_bot_contacts; i++) {
+          if (pass == 0 && bot_contacts[i].cached) continue;
+          bool busy = false;
+          for (int j = 0; j < BOT_MAX_PENDING; j++) {
+            if (bot_pending[j].active && bot_pending[j].contact_idx == i) busy = true;
+          }
+          if (!busy && bot_contacts[i].last_heard < oldest) { oldest = bot_contacts[i].last_heard; idx = i; }
         }
-        if (!busy && bot_contacts[i].last_heard < oldest) { oldest = bot_contacts[i].last_heard; idx = i; }
       }
-      if (idx < 0) return;
+      if (idx < 0) return -1;
     }
     BotContact& c = bot_contacts[idx];
     memset(&c, 0, sizeof(c));
@@ -173,6 +179,73 @@ void MyMesh::botLearnContact(const mesh::Identity& id, const char* name) {
   if (name && *name) {
     snprintf(c.name, sizeof(c.name), "%s", name);
   }
+  return idx;
+}
+
+// ---- flash contact cache ----
+
+#define BOT_CACHE_VERSION 1
+
+void MyMesh::loadBotCache() {
+  if (!_fs->exists(BOT_CACHE_FILE)) return;
+#if defined(RP2040_PLATFORM)
+  File file = _fs->open(BOT_CACHE_FILE, "r");
+#else
+  File file = _fs->open(BOT_CACHE_FILE);
+#endif
+  if (!file) return;
+  uint8_t hdr[3];   // version, count, next
+  if (file.read(hdr, 3) == 3 && hdr[0] == BOT_CACHE_VERSION && hdr[1] <= BOT_CACHE_SIZE && hdr[2] < BOT_CACHE_SIZE) {
+    int n = 0;
+    while (n < hdr[1] && file.read((uint8_t *)&bot_cache[n], sizeof(BotCacheEntry)) == sizeof(BotCacheEntry)) {
+      bot_cache[n].name[BOT_CACHE_NAME_LEN - 1] = 0;
+      n++;
+    }
+    bot_cache_count = n;
+    bot_cache_next = n < BOT_CACHE_SIZE ? n : hdr[2];
+  }
+  file.close();
+
+  for (int i = 0; i < bot_cache_count; i++) {
+    int idx = botLearnContact(mesh::Identity(bot_cache[i].pub_key), bot_cache[i].name);
+    if (idx >= 0) bot_contacts[idx].cached = true;
+  }
+}
+
+bool MyMesh::saveBotCache() {
+  File file = botOpenWrite(_fs, BOT_CACHE_FILE);
+  if (!file) return false;
+  uint8_t hdr[3] = { BOT_CACHE_VERSION, bot_cache_count, bot_cache_next };
+  bool ok = file.write(hdr, 3) == 3;
+  for (int i = 0; ok && i < bot_cache_count; i++) {
+    ok = file.write((const uint8_t *)&bot_cache[i], sizeof(BotCacheEntry)) == sizeof(BotCacheEntry);
+  }
+  file.close();
+  return ok;
+}
+
+// Save a contact to the flash cache, unless it's already there (no write in that case).
+void MyMesh::botCacheContact(BotContact& c) {
+  if (c.cached) return;
+  for (int i = 0; i < bot_cache_count; i++) {
+    if (memcmp(bot_cache[i].pub_key, c.id.pub_key, PUB_KEY_SIZE) == 0) { c.cached = true; return; }
+  }
+  BotCacheEntry& e = bot_cache[bot_cache_next];   // FIFO: overwrites the oldest once full
+  if (bot_cache_count == BOT_CACHE_SIZE) {
+    // the contact being replaced is no longer protected from RAM eviction
+    for (int i = 0; i < num_bot_contacts; i++) {
+      if (memcmp(bot_contacts[i].id.pub_key, e.pub_key, PUB_KEY_SIZE) == 0) bot_contacts[i].cached = false;
+    }
+  }
+  memcpy(e.pub_key, c.id.pub_key, PUB_KEY_SIZE);
+  snprintf(e.name, sizeof(e.name), "%s", c.name);
+  bot_cache_next = (bot_cache_next + 1) % BOT_CACHE_SIZE;
+  if (bot_cache_count < BOT_CACHE_SIZE) bot_cache_count++;
+  c.cached = true;
+  char who[20];
+  bool ok = saveBotCache();
+  botLog("saved %s to contact cache (%d/%d)%s", botWho(c, who, sizeof(who)), bot_cache_count, BOT_CACHE_SIZE,
+         ok ? "" : " - WRITE FAILED");
 }
 
 // Called for every received packet, before the normal Mesh processing.
@@ -295,6 +368,7 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   botWho(from, who, sizeof(who));
   botLog("TXT from %s %s %u hops, try %u, ts %08lx, snr %.1f", who, pkt->isRouteFlood() ? "flood" : "direct",
          (uint32_t)pkt->getPathHashCount(), (uint32_t)(data[4] & 3), (unsigned long)sender_timestamp, pkt->getSNR());
+  botCacheContact(from);   // a successful DM: remember them across reboots (no-op if already saved)
 
   // ACK exactly as a companion does: truncated hash of timestamp + flags + text + sender pub_key
   uint8_t ack_hash[6];
@@ -511,12 +585,46 @@ bool MyMesh::handleBotCommand(uint32_t sender_timestamp, const char* command, ch
     }
   } else if (strcmp(arg, "key") == 0) {
     mesh::Utils::toHex(reply, bot_id.pub_key, PUB_KEY_SIZE);
+  } else if (memcmp(arg, "learn ", 6) == 0) {
+    // bot learn <64 hex pub key> [name]: for senders whose adverts don't reach the bot
+    const char* a = &arg[6];
+    while (*a == ' ') a++;
+    char hex[2 * PUB_KEY_SIZE + 1];
+    int h = 0;
+    while (h < 2 * PUB_KEY_SIZE && isxdigit((unsigned char)a[h])) { hex[h] = a[h]; h++; }
+    hex[h] = 0;
+    const char* nm = &a[h];
+    while (*nm == ' ') nm++;
+    uint8_t key[PUB_KEY_SIZE];
+    if (h != 2 * PUB_KEY_SIZE || (a[h] != 0 && a[h] != ' ') || !mesh::Utils::fromHex(key, PUB_KEY_SIZE, hex)) {
+      strcpy(reply, "Err - usage: bot learn <64 hex chars public key> [name]");
+    } else {
+      int idx = botLearnContact(mesh::Identity(key), *nm ? nm : NULL);
+      if (idx < 0) {
+        strcpy(reply, "Err - can't add that key");
+      } else {
+        BotContact& c = bot_contacts[idx];
+        botCacheContact(c);
+        char who[20];
+        sprintf(reply, "OK - %s learned and saved", botWho(c, who, sizeof(who)));
+      }
+    }
+  } else if (strcmp(arg, "cache") == 0) {
+    int n = sprintf(reply, "%d/%d saved:", bot_cache_count, BOT_CACHE_SIZE);
+    for (int i = 0; i < bot_cache_count && n < 140; i++) {
+      n += snprintf(&reply[n], 160 - n, " %.10s/%02x", bot_cache[i].name[0] ? bot_cache[i].name : "?",
+                    (uint32_t)bot_cache[i].pub_key[0]);
+    }
+  } else if (strcmp(arg, "cache clear") == 0) {
+    bot_cache_count = bot_cache_next = 0;
+    for (int i = 0; i < num_bot_contacts; i++) bot_contacts[i].cached = false;
+    strcpy(reply, saveBotCache() ? "OK" : "Err - save failed");
   } else if (memcmp(arg, "log", 3) == 0 && (arg[3] == 0 || arg[3] == ' ')) {
     const char* a = &arg[3];
     while (*a == ' ') a++;
     botLogCommand(sender_timestamp, a, reply);
   } else {
-    strcpy(reply, "Err - usage: bot [on|off|name <name>|name -|advert|key|log [n|clear]]");
+    strcpy(reply, "Err - usage: bot [on|off|name <n>|name -|advert|key|learn <key> [name]|cache [clear]|log [n|clear]]");
   }
   return true;
 }

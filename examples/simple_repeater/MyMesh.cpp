@@ -912,6 +912,8 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   bot_msgs_recv = bot_replies_sent = 0;
   memset(bot_log, 0, sizeof(bot_log));
   bot_log_next = bot_log_count = 0;
+  memset(bot_cache, 0, sizeof(bot_cache));
+  bot_cache_count = bot_cache_next = 0;
 #endif
 
   // defaults
@@ -977,6 +979,7 @@ void MyMesh::begin(FILESYSTEM *fs) {
   acl.load(_fs, self_id);
 #ifdef REPEATER_BOT
   loadBotPrefs();
+  loadBotCache();
 #endif
   // TODO: key_store.begin();
   region_map.load(_fs);

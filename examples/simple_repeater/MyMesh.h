@@ -126,13 +126,18 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   uint32_t bot_msgs_recv, bot_replies_sent;
   BotLogEntry bot_log[BOT_LOG_SIZE];
   uint8_t bot_log_next, bot_log_count;
+  BotCacheEntry bot_cache[BOT_CACHE_SIZE];
+  uint8_t bot_cache_count, bot_cache_next;
 
   void loadBotPrefs();
   bool saveBotPrefs();
   const char* getBotName(char* buf, size_t len) const;
   mesh::Packet* createBotAdvert();
   void sendBotAdvert(bool flood, uint32_t delay_millis);
-  void botLearnContact(const mesh::Identity& id, const char* name);
+  int botLearnContact(const mesh::Identity& id, const char* name);
+  void loadBotCache();
+  bool saveBotCache();
+  void botCacheContact(BotContact& c);
   bool botHandleRecv(mesh::Packet* pkt);
   void botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
   void botHandlePath(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
