@@ -229,6 +229,19 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   getRNG()->random(&ack_hash[5], 1);
   botSendAck(pkt, from, ack_hash, sizeof(ack_hash));
 
+  if (pkt->isRouteFlood()) {
+    // A flood means the sender had no (working) route to us, so any route we stored is stale.
+    // Use the reverse of the path this flood took; our PATH+ACK just told the sender to use that
+    // same path, so their following direct messages arrive along it. A reciprocal PATH from the
+    // sender (if one arrives) replaces this with the route they measured.
+    uint8_t hs = pkt->getPathHashSize();
+    uint8_t hc = pkt->getPathHashCount();
+    for (int h = 0; h < hc; h++) {
+      memcpy(&from.out_path[h * hs], &pkt->path[(hc - 1 - h) * hs], hs);
+    }
+    from.out_path_len = pkt->path_len;   // same hash size and count
+  }
+
   bot_msgs_recv++;
   if (sender_timestamp == from.last_msg_timestamp) return;   // a retry of a message we already answered
   from.last_msg_timestamp = sender_timestamp;
