@@ -97,6 +97,20 @@ void setup() {
   Serial.print("Repeater ID: ");
   mesh::Utils::printHex(Serial, the_mesh.self_id.pub_key, PUB_KEY_SIZE); Serial.println();
 
+#ifdef REPEATER_BOT
+  if (!store.load(BOT_IDENTITY_NAME, the_mesh.bot_id)) {
+    MESH_DEBUG_PRINTLN("Generating new bot keypair");
+    int count = 0;
+    do {   // avoid reserved hashes, and sharing a hash prefix with the repeater identity
+      the_mesh.bot_id = radio_new_identity(); count++;
+    } while (count < 20 && (the_mesh.bot_id.pub_key[0] == 0x00 || the_mesh.bot_id.pub_key[0] == 0xFF
+                            || the_mesh.bot_id.pub_key[0] == the_mesh.self_id.pub_key[0]));
+    store.save(BOT_IDENTITY_NAME, the_mesh.bot_id);
+  }
+  Serial.print("Bot ID: ");
+  mesh::Utils::printHex(Serial, the_mesh.bot_id.pub_key, PUB_KEY_SIZE); Serial.println();
+#endif
+
   command[0] = 0;
 #ifdef ETHERNET_ENABLED
   ethernet_command[0] = 0;

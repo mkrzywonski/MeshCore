@@ -36,6 +36,7 @@
 #include <helpers/RegionMap.h>
 #include <helpers/RoutingPolicy.h>
 #include "RateLimiter.h"
+#include "RepeaterBot.h"
 
 #ifdef WITH_BRIDGE
 extern AbstractBridge* bridge;
@@ -114,6 +115,30 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   RS232Bridge bridge;
 #elif defined(WITH_ESPNOW_BRIDGE)
   ESPNowBridge bridge;
+#endif
+
+#ifdef REPEATER_BOT
+  BotPrefs bot_prefs;
+  BotContact bot_contacts[BOT_MAX_CONTACTS];
+  int num_bot_contacts;
+  BotPendingReply bot_pending[BOT_MAX_PENDING];
+  RateLimiter bot_limiter;
+  uint32_t bot_msgs_recv, bot_replies_sent;
+
+  void loadBotPrefs();
+  bool saveBotPrefs();
+  const char* getBotName(char* buf, size_t len) const;
+  mesh::Packet* createBotAdvert();
+  void sendBotAdvert(bool flood, uint32_t delay_millis);
+  void botLearnContact(const mesh::Identity& id, const char* name);
+  bool botHandleRecv(mesh::Packet* pkt);
+  void botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
+  void botHandlePath(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
+  void botFormatReport(mesh::Packet* pkt, char* text, size_t len);
+  void botSendAck(mesh::Packet* pkt, BotContact& to, const uint8_t* ack_hash, uint8_t ack_len);
+  void botSendReply(BotPendingReply& r);
+  void botLoop();
+  bool handleBotCommand(const char* command, char* reply);
 #endif
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
@@ -222,6 +247,10 @@ public:
   void onDefaultRegionChanged(const RegionEntry* r) override;
 
   mesh::LocalIdentity& getSelfId() override { return self_id; }
+
+#ifdef REPEATER_BOT
+  mesh::LocalIdentity bot_id;
+#endif
 
   void saveIdentity(const mesh::LocalIdentity& new_id) override;
   void clearStats() override;

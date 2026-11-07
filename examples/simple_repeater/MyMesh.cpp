@@ -565,6 +565,11 @@ mesh::DispatcherAction MyMesh::onRecvPacket(mesh::Packet* pkt) {
   } else {
     recv_pkt_region = NULL;
   }
+#ifdef REPEATER_BOT
+  if (botHandleRecv(pkt)) {           // a DM (or path) for the bot identity, now consumed
+    return routeRecvPacket(pkt);      // packet was marked do-not-retransmit
+  }
+#endif
   return Mesh::onRecvPacket(pkt);
 }
 
@@ -650,6 +655,15 @@ static bool isShare(const mesh::Packet *packet) {
 void MyMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, uint32_t timestamp,
                           const uint8_t *app_data, size_t app_data_len) {
   mesh::Mesh::onAdvertRecv(packet, id, timestamp, app_data, app_data_len); // chain to super impl
+
+#ifdef REPEATER_BOT
+  {
+    AdvertDataParser parser(app_data, app_data_len);
+    if (parser.isValid() && parser.getType() == ADV_TYPE_CHAT) {
+      botLearnContact(id, parser.hasName() ? parser.getName() : "");
+    }
+  }
+#endif
 
   // if this a zero hop advert (and not via 'Share'), add it to neighbours
   if (packet->getPathHashCount() == 0 && !isShare(packet)) {
@@ -867,6 +881,9 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
       telemetry(MAX_PACKET_PAYLOAD - 4),
       discover_limiter(4, 120),  // max 4 every 2 minutes
       anon_limiter(4, 180)   // max 4 every 3 minutes
+#ifdef REPEATER_BOT
+      , bot_limiter(BOT_MAX_REPLIES_PER_MIN, 60)
+#endif
 #if defined(WITH_RS232_BRIDGE)
       , bridge(&_prefs, WITH_RS232_BRIDGE, _mgr, &rtc)
 #endif
@@ -885,6 +902,14 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
 
 #if MAX_NEIGHBOURS
   memset(neighbours, 0, sizeof(neighbours));
+#endif
+#ifdef REPEATER_BOT
+  memset(&bot_prefs, 0, sizeof(bot_prefs));
+  bot_prefs.enabled = 1;
+  memset(bot_contacts, 0, sizeof(bot_contacts));
+  num_bot_contacts = 0;
+  memset(bot_pending, 0, sizeof(bot_pending));
+  bot_msgs_recv = bot_replies_sent = 0;
 #endif
 
   // defaults
@@ -948,6 +973,9 @@ void MyMesh::begin(FILESYSTEM *fs) {
   // load persisted prefs
   _cli.loadPrefs(_fs);
   acl.load(_fs, self_id);
+#ifdef REPEATER_BOT
+  loadBotPrefs();
+#endif
   // TODO: key_store.begin();
   region_map.load(_fs);
 
@@ -1041,6 +1069,9 @@ void MyMesh::sendSelfAdvertisement(int delay_millis, bool flood) {
   } else {
     MESH_DEBUG_PRINTLN("ERROR: unable to create advertisement packet!");
   }
+#ifdef REPEATER_BOT
+  sendBotAdvert(flood, delay_millis + 2000);
+#endif
 }
 
 void MyMesh::updateAdvertTimer() {
@@ -1238,6 +1269,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
+#ifdef REPEATER_BOT
+  if (handleBotCommand(command, reply)) return;
+#endif
+
   // handle ACL related commands
   if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
     char* hex = &command[8];
@@ -1292,17 +1327,26 @@ void MyMesh::loop() {
 #endif
 
   mesh::Mesh::loop();
+#ifdef REPEATER_BOT
+  botLoop();
+#endif
 
   if (next_flood_advert && millisHasNowPassed(next_flood_advert)) {
     mesh::Packet *pkt = createSelfAdvert();
     uint32_t delay_millis = 0;
     if (pkt) sendFloodScoped(default_scope, pkt, delay_millis, _prefs.path_hash_mode + 1);
+#ifdef REPEATER_BOT
+    sendBotAdvert(true, delay_millis + 2000);
+#endif
 
     updateFloodAdvertTimer(); // schedule next flood advert
     updateAdvertTimer();      // also schedule local advert (so they don't overlap)
   } else if (next_local_advert && millisHasNowPassed(next_local_advert)) {
     mesh::Packet *pkt = createSelfAdvert();
     if (pkt) sendZeroHop(pkt);
+#ifdef REPEATER_BOT
+    sendBotAdvert(false, 2000);
+#endif
 
     updateAdvertTimer(); // schedule next local advert
   }
