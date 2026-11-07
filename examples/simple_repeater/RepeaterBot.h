@@ -37,8 +37,11 @@ struct BotContact {
 
 struct BotPendingReply {
   bool active;
+  bool awaiting_ack;             // sent direct; resend by flood if no ACK by 'send_at'
   int contact_idx;
-  unsigned long send_at;         // wait for the sender's reciprocal path until here, then send anyway
+  unsigned long send_at;         // queued: send at this time; awaiting_ack: ACK deadline
+  uint32_t timestamp;            // reused by the flood resend, so the sender can de-dupe
+  uint32_t expected_ack;
   char text[BOT_REPLY_MAX_LEN + 1];
 };
 

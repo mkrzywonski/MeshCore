@@ -7,6 +7,8 @@
 #define BOT_PATH_WAIT_BASE  2000    // ms to wait for the sender's reciprocal path, plus...
 #define BOT_PATH_WAIT_HOP   2500    // ...this much per hop
 #define BOT_PATH_WAIT_MAX  30000
+#define BOT_ACK_WAIT_BASE   4000    // ms to wait for the ACK of a direct reply, plus...
+#define BOT_ACK_WAIT_HOP    2500    // ...this much per hop
 
 static File botOpenWrite(FILESYSTEM* fs, const char* filename) {
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
@@ -261,6 +263,8 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   if (slot == NULL) return;   // busy
 
   slot->active = true;
+  slot->awaiting_ack = false;
+  slot->timestamp = 0;
   slot->contact_idx = idx;
   botFormatReport(pkt, slot->text, sizeof(slot->text));
   if (pkt->isRouteFlood()) {
@@ -282,24 +286,37 @@ void MyMesh::botHandlePath(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
 
   from.out_path_len = mesh::Packet::copyPath(from.out_path, &data[1], path_len);
 
+  // a PATH sent in answer to our flood reply carries the sender's ACK for it
+  size_t k = 1 + (size_t)hs * hc;
+  if (k + 5 <= len && (data[k] & 0x0F) == PAYLOAD_TYPE_ACK) {
+    uint32_t ack_crc;
+    memcpy(&ack_crc, &data[k + 1], 4);
+    botCheckAck(ack_crc);
+  }
+
   int idx = &from - bot_contacts;
   for (int j = 0; j < BOT_MAX_PENDING; j++) {
-    if (bot_pending[j].active && bot_pending[j].contact_idx == idx) {
+    if (bot_pending[j].active && !bot_pending[j].awaiting_ack && bot_pending[j].contact_idx == idx) {
       bot_pending[j].send_at = futureMillis(300);   // path is known now, reply right away
     }
   }
   // NOTE: no reciprocal path (same as the repeater's own peers)
 }
 
-void MyMesh::botSendReply(BotPendingReply& r) {
+// Sends the reply. A direct send keeps the slot active, awaiting the ACK; a flood send frees it.
+void MyMesh::botSendReply(BotPendingReply& r, uint8_t attempt) {
   BotContact& to = bot_contacts[r.contact_idx];
+  r.active = false;
 
   uint8_t temp[5 + BOT_REPLY_MAX_LEN + 1];
-  uint32_t timestamp = getRTCClock()->getCurrentTimeUnique();
-  memcpy(temp, &timestamp, 4);
-  temp[4] = (TXT_TYPE_PLAIN << 2);   // attempt 0
+  if (r.timestamp == 0) r.timestamp = getRTCClock()->getCurrentTimeUnique();
+  memcpy(temp, &r.timestamp, 4);
+  temp[4] = (TXT_TYPE_PLAIN << 2) | (attempt & 3);
   size_t text_len = strlen(r.text);
   memcpy(&temp[5], r.text, text_len);
+
+  // the ACK the recipient will send: truncated hash of timestamp + flags + text + OUR (the bot's) pub_key
+  mesh::Utils::sha256((uint8_t *)&r.expected_ack, 4, temp, 5 + text_len, bot_id.pub_key, PUB_KEY_SIZE);
 
   mesh::Packet* pkt = createDatagram(PAYLOAD_TYPE_TXT_MSG, to.id, to.secret, temp, 5 + text_len);
   if (pkt == NULL) return;
@@ -309,16 +326,42 @@ void MyMesh::botSendReply(BotPendingReply& r) {
     sendFloodScoped(default_scope, pkt, 0, _prefs.path_hash_mode + 1);
   } else {
     sendDirect(pkt, to.out_path, to.out_path_len, 0);
+    r.active = r.awaiting_ack = true;
+    r.send_at = futureMillis(BOT_ACK_WAIT_BASE + BOT_ACK_WAIT_HOP * (to.out_path_len & 63));
   }
   bot_replies_sent++;
+}
+
+bool MyMesh::botCheckAck(uint32_t ack_crc) {
+  for (int j = 0; j < BOT_MAX_PENDING; j++) {
+    BotPendingReply& r = bot_pending[j];
+    if (r.active && r.awaiting_ack && r.expected_ack == ack_crc) {
+      r.active = false;   // delivered
+      return true;
+    }
+  }
+  return false;
+}
+
+void MyMesh::onAckRecv(mesh::Packet* packet, uint32_t ack_crc) {
+  if (botCheckAck(ack_crc) && (packet->isRouteFlood() || packet->getPathHashCount() == 0)) {
+    packet->markDoNotRetransmit();   // ACK was for the bot, so don't retransmit
+  }
 }
 
 void MyMesh::botLoop() {
   for (int j = 0; j < BOT_MAX_PENDING; j++) {
     BotPendingReply& r = bot_pending[j];
-    if (r.active && millisHasNowPassed(r.send_at)) {
-      r.active = false;
-      if (bot_prefs.enabled) botSendReply(r);
+    if (!r.active || !millisHasNowPassed(r.send_at)) continue;
+    if (!bot_prefs.enabled) { r.active = false; continue; }
+
+    if (r.awaiting_ack) {
+      // no ACK for the direct reply: the stored route is stale, so forget it and flood once
+      bot_contacts[r.contact_idx].out_path_len = OUT_PATH_UNKNOWN;
+      r.awaiting_ack = false;
+      botSendReply(r, 1);
+    } else {
+      botSendReply(r, 0);
     }
   }
 }

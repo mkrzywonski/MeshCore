@@ -136,7 +136,8 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   void botHandlePath(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
   void botFormatReport(mesh::Packet* pkt, char* text, size_t len);
   void botSendAck(mesh::Packet* pkt, BotContact& to, const uint8_t* ack_hash, uint8_t ack_len);
-  void botSendReply(BotPendingReply& r);
+  void botSendReply(BotPendingReply& r, uint8_t attempt);
+  bool botCheckAck(uint32_t ack_crc);
   void botLoop();
   bool handleBotCommand(const char* command, char* reply);
 #endif
@@ -197,6 +198,9 @@ protected:
   void onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender_idx, const uint8_t* secret, uint8_t* data, size_t len) override;
   bool onPeerPathRecv(mesh::Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override;
   void onControlDataRecv(mesh::Packet* packet) override;
+#ifdef REPEATER_BOT
+  void onAckRecv(mesh::Packet* packet, uint32_t ack_crc) override;
+#endif
 
   void sendFloodReply(mesh::Packet* packet, unsigned long delay_millis, uint8_t path_hash_size);
 
