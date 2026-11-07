@@ -910,6 +910,8 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   num_bot_contacts = 0;
   memset(bot_pending, 0, sizeof(bot_pending));
   bot_msgs_recv = bot_replies_sent = 0;
+  memset(bot_log, 0, sizeof(bot_log));
+  bot_log_next = bot_log_count = 0;
 #endif
 
   // defaults
@@ -1270,7 +1272,7 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
   }
 
 #ifdef REPEATER_BOT
-  if (handleBotCommand(command, reply)) return;
+  if (handleBotCommand(sender_timestamp, command, reply)) return;
 #endif
 
   // handle ACL related commands

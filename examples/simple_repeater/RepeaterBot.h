@@ -23,6 +23,9 @@
 #define BOT_MIN_REPLY_INTERVAL_SECS 3     // per contact
 #define BOT_MAX_REPLIES_PER_MIN    12     // all contacts
 
+#define BOT_LOG_SIZE               32     // event log ring buffer ("bot log"), RAM only
+#define BOT_LOG_MSG_LEN            80
+
 struct BotContact {
   mesh::Identity id;
   uint8_t secret[PUB_KEY_SIZE];
@@ -43,6 +46,11 @@ struct BotPendingReply {
   uint32_t timestamp;            // reused by the flood resend, so the sender can de-dupe
   uint32_t expected_ack;
   char text[BOT_REPLY_MAX_LEN + 1];
+};
+
+struct BotLogEntry {
+  uint32_t time;                 // RTC secs
+  char msg[BOT_LOG_MSG_LEN];
 };
 
 struct BotPrefs {

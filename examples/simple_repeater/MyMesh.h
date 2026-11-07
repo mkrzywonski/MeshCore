@@ -124,6 +124,8 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   BotPendingReply bot_pending[BOT_MAX_PENDING];
   RateLimiter bot_limiter;
   uint32_t bot_msgs_recv, bot_replies_sent;
+  BotLogEntry bot_log[BOT_LOG_SIZE];
+  uint8_t bot_log_next, bot_log_count;
 
   void loadBotPrefs();
   bool saveBotPrefs();
@@ -139,7 +141,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   void botSendReply(BotPendingReply& r, uint8_t attempt);
   bool botCheckAck(uint32_t ack_crc);
   void botLoop();
-  bool handleBotCommand(const char* command, char* reply);
+  void botLog(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+  const char* botWho(const BotContact& c, char* buf, size_t len) const;
+  void botLogCommand(uint32_t sender_timestamp, const char* arg, char* reply);
+  bool handleBotCommand(uint32_t sender_timestamp, const char* command, char* reply);
 #endif
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);

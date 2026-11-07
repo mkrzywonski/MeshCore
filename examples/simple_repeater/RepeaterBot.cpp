@@ -2,6 +2,8 @@
 
 #ifdef REPEATER_BOT
 
+#include <stdarg.h>
+
 #define BOT_PREFS_VERSION      1
 #define BOT_ACK_DELAY        200
 #define BOT_PATH_WAIT_BASE  2000    // ms to wait for the sender's reciprocal path, plus...
@@ -19,6 +21,59 @@ static File botOpenWrite(FILESYSTEM* fs, const char* filename) {
 #else
   return fs->open(filename, "w", true);
 #endif
+}
+
+// ---- event log: what the bot did with each message, kept in RAM for "bot log" ----
+
+void MyMesh::botLog(const char* fmt, ...) {
+  BotLogEntry& e = bot_log[bot_log_next];
+  bot_log_next = (bot_log_next + 1) % BOT_LOG_SIZE;
+  if (bot_log_count < BOT_LOG_SIZE) bot_log_count++;
+  e.time = getRTCClock()->getCurrentTime();
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(e.msg, sizeof(e.msg), fmt, args);
+  va_end(args);
+#if MESH_PACKET_LOGGING
+  Serial.printf("BOT %02lu:%02lu:%02lu %s\n", (unsigned long)(e.time / 3600 % 24),
+                (unsigned long)(e.time / 60 % 60), (unsigned long)(e.time % 60), e.msg);
+#endif
+}
+
+const char* MyMesh::botWho(const BotContact& c, char* buf, size_t len) const {
+  snprintf(buf, len, "%.12s/%02x", c.name[0] ? c.name : "?", (uint32_t)c.id.pub_key[0]);
+  return buf;
+}
+
+// "bot log": over serial, print every entry (oldest first); remotely the reply holds one entry,
+// so "bot log [n]" returns the n-th newest (default 1). "bot log clear" empties it.
+void MyMesh::botLogCommand(uint32_t sender_timestamp, const char* arg, char* reply) {
+  if (strcmp(arg, "clear") == 0) {
+    bot_log_next = bot_log_count = 0;
+    strcpy(reply, "OK");
+    return;
+  }
+  if (bot_log_count == 0) {
+    strcpy(reply, "(bot log is empty)");
+    return;
+  }
+  if (sender_timestamp == 0 && *arg == 0) {   // serial console: dump it all
+    for (int i = bot_log_count; i >= 1; i--) {
+      const BotLogEntry& e = bot_log[(bot_log_next + BOT_LOG_SIZE - i) % BOT_LOG_SIZE];
+      Serial.printf("  %02lu:%02lu:%02lu %s\n", (unsigned long)(e.time / 3600 % 24),
+                    (unsigned long)(e.time / 60 % 60), (unsigned long)(e.time % 60), e.msg);
+    }
+    sprintf(reply, "%d entries (times UTC)", bot_log_count);
+    return;
+  }
+  int n = *arg ? atoi(arg) : 1;
+  if (n < 1 || n > bot_log_count) {
+    sprintf(reply, "Err - 1..%d", bot_log_count);
+    return;
+  }
+  const BotLogEntry& e = bot_log[(bot_log_next + BOT_LOG_SIZE - n) % BOT_LOG_SIZE];
+  snprintf(reply, 160, "%d/%d %02lu:%02lu:%02lu %s", n, bot_log_count, (unsigned long)(e.time / 3600 % 24),
+           (unsigned long)(e.time / 60 % 60), (unsigned long)(e.time % 60), e.msg);
 }
 
 void MyMesh::loadBotPrefs() {
@@ -135,9 +190,11 @@ bool MyMesh::botHandleRecv(mesh::Packet* pkt) {
   if (!bot_id.isHashMatch(&dest_hash)) return false;
   if (getTables()->wasSeen(pkt)) return false;   // duplicate, let the normal path drop it
 
+  int candidates = 0;
   for (int i = 0; i < num_bot_contacts; i++) {
     BotContact& c = bot_contacts[i];
     if (!c.id.isHashMatch(&src_hash)) continue;
+    candidates++;
 
     if (!c.has_secret) {
       bot_id.calcSharedSecret(c.secret, c.id);
@@ -157,7 +214,10 @@ bool MyMesh::botHandleRecv(mesh::Packet* pkt) {
     pkt->markDoNotRetransmit();   // NOTE: clobbers header, so do this last
     return true;
   }
-  // unknown sender (we have not heard their advert): nothing we can decrypt, carry on as normal
+  // unknown sender (we have not heard their advert): nothing we can decrypt, carry on as normal.
+  // (also logged when another node merely shares the bot's 1-byte hash)
+  botLog("%s to bot from %02x: %s", type == PAYLOAD_TYPE_TXT_MSG ? "TXT" : "PATH", (uint32_t)src_hash,
+         candidates ? "decrypt failed" : "unknown sender, need advert");
   return false;
 }
 
@@ -191,17 +251,21 @@ void MyMesh::botFormatReport(mesh::Packet* pkt, char* text, size_t len) {
 }
 
 void MyMesh::botSendAck(mesh::Packet* pkt, BotContact& to, const uint8_t* ack_hash, uint8_t ack_len) {
+  const char* how;
+  bool ok;
   if (pkt->isRouteFlood()) {
     // tell the sender the path TO here (so they can go direct), with the ACK piggy-backed
     mesh::Packet* path = createPathReturn(to.id, to.secret, pkt->path, pkt->path_len,
                                           PAYLOAD_TYPE_ACK, ack_hash, ack_len);
-    if (path) {
+    if ((ok = path != NULL)) {
       bot_id.copyHashTo(&path->payload[1]);   // src hash is the bot, not the repeater
       sendFloodReply(path, BOT_ACK_DELAY, pkt->getPathHashSize());
     }
+    how = "path+ack flood";
   } else if (to.out_path_len == OUT_PATH_UNKNOWN) {
     mesh::Packet* ack = createAck(ack_hash, ack_len);
-    if (ack) sendFloodScoped(default_scope, ack, BOT_ACK_DELAY, _prefs.path_hash_mode + 1);
+    if ((ok = ack != NULL)) sendFloodScoped(default_scope, ack, BOT_ACK_DELAY, _prefs.path_hash_mode + 1);
+    how = "ack flood";
   } else {
     uint32_t d = BOT_ACK_DELAY;
     if (getExtraAckTransmitCount() > 0) {
@@ -210,8 +274,11 @@ void MyMesh::botSendAck(mesh::Packet* pkt, BotContact& to, const uint8_t* ack_ha
       d += 300;
     }
     mesh::Packet* a2 = createAck(ack_hash, ack_len);
-    if (a2) sendDirect(a2, to.out_path, to.out_path_len, d);
+    if ((ok = a2 != NULL)) sendDirect(a2, to.out_path, to.out_path_len, d);
+    how = "ack direct";
   }
+  botLog(" %s %s (txq %d, free %d)", how, ok ? "queued" : "FAILED: no packet buffer",
+         _mgr->getOutboundTotal(), _mgr->getFreeCount());
 }
 
 void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len) {
@@ -223,6 +290,11 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
 
   data[len] = 0;
   size_t text_len = strlen((const char *)&data[5]);
+
+  char who[20];
+  botWho(from, who, sizeof(who));
+  botLog("TXT from %s %s %u hops, try %u, ts %08lx, snr %.1f", who, pkt->isRouteFlood() ? "flood" : "direct",
+         (uint32_t)pkt->getPathHashCount(), (uint32_t)(data[4] & 3), (unsigned long)sender_timestamp, pkt->getSNR());
 
   // ACK exactly as a companion does: truncated hash of timestamp + flags + text + sender pub_key
   uint8_t ack_hash[6];
@@ -245,22 +317,39 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   }
 
   bot_msgs_recv++;
-  if (sender_timestamp == from.last_msg_timestamp) return;   // a retry of a message we already answered
+  if (sender_timestamp == from.last_msg_timestamp) {   // a retry of a message we already answered
+    botLog(" retry of a message already handled: no new reply");
+    return;
+  }
   from.last_msg_timestamp = sender_timestamp;
 
   uint32_t now = getRTCClock()->getCurrentTime();
-  if (from.last_reply_secs && now >= from.last_reply_secs && now - from.last_reply_secs < BOT_MIN_REPLY_INTERVAL_SECS) return;
-  if (!bot_limiter.allow(now)) return;
+  if (from.last_reply_secs && now >= from.last_reply_secs && now - from.last_reply_secs < BOT_MIN_REPLY_INTERVAL_SECS) {
+    botLog(" no reply: < %d s since last reply to this contact", BOT_MIN_REPLY_INTERVAL_SECS);
+    return;
+  }
+  if (!bot_limiter.allow(now)) {
+    botLog(" no reply: global limit (%d/min)", BOT_MAX_REPLIES_PER_MIN);
+    return;
+  }
 
   int idx = &from - bot_contacts;
   BotPendingReply* slot = NULL;
   for (int j = 0; j < BOT_MAX_PENDING; j++) {
-    if (bot_pending[j].active && bot_pending[j].contact_idx == idx) { slot = &bot_pending[j]; break; }   // replace
+    if (bot_pending[j].active && bot_pending[j].contact_idx == idx) {   // replace
+      slot = &bot_pending[j];
+      botLog(" replaces the reply still pending for the previous message%s",
+             slot->awaiting_ack ? " (its ack wait is dropped)" : "");
+      break;
+    }
   }
   for (int j = 0; slot == NULL && j < BOT_MAX_PENDING; j++) {
     if (!bot_pending[j].active) slot = &bot_pending[j];
   }
-  if (slot == NULL) return;   // busy
+  if (slot == NULL) {
+    botLog(" no reply: all %d reply slots busy", BOT_MAX_PENDING);
+    return;
+  }
 
   slot->active = true;
   slot->awaiting_ack = false;
@@ -270,9 +359,12 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   if (pkt->isRouteFlood()) {
     // the sender answers our PATH+ACK with a reciprocal path; wait for it so the reply can go direct
     uint32_t wait = BOT_PATH_WAIT_BASE + BOT_PATH_WAIT_HOP * pkt->getPathHashCount();
-    slot->send_at = futureMillis(wait > BOT_PATH_WAIT_MAX ? BOT_PATH_WAIT_MAX : wait);
+    if (wait > BOT_PATH_WAIT_MAX) wait = BOT_PATH_WAIT_MAX;
+    slot->send_at = futureMillis(wait);
+    botLog(" reply queued, up to %lu s for their path", (unsigned long)(wait / 1000));
   } else {
     slot->send_at = futureMillis(BOT_ACK_DELAY + 800);
+    botLog(" reply queued");
   }
   from.last_reply_secs = now;
 }
@@ -288,7 +380,11 @@ void MyMesh::botHandlePath(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
 
   // a PATH sent in answer to our flood reply carries the sender's ACK for it
   size_t k = 1 + (size_t)hs * hc;
-  if (k + 5 <= len && (data[k] & 0x0F) == PAYLOAD_TYPE_ACK) {
+  bool has_ack = k + 5 <= len && (data[k] & 0x0F) == PAYLOAD_TYPE_ACK;
+  char who[20];
+  botLog("PATH from %s: route to them %u hops%s, came %u hops", botWho(from, who, sizeof(who)),
+         (uint32_t)hc, has_ack ? ", with ack" : "", (uint32_t)pkt->getPathHashCount());
+  if (has_ack) {
     uint32_t ack_crc;
     memcpy(&ack_crc, &data[k + 1], 4);
     botCheckAck(ack_crc);
@@ -318,16 +414,26 @@ void MyMesh::botSendReply(BotPendingReply& r, uint8_t attempt) {
   // the ACK the recipient will send: truncated hash of timestamp + flags + text + OUR (the bot's) pub_key
   mesh::Utils::sha256((uint8_t *)&r.expected_ack, 4, temp, 5 + text_len, bot_id.pub_key, PUB_KEY_SIZE);
 
+  char who[20];
+  botWho(to, who, sizeof(who));
   mesh::Packet* pkt = createDatagram(PAYLOAD_TYPE_TXT_MSG, to.id, to.secret, temp, 5 + text_len);
-  if (pkt == NULL) return;
+  if (pkt == NULL) {
+    botLog("reply to %s FAILED: no packet buffer (txq %d)", who, _mgr->getOutboundTotal());
+    return;
+  }
   bot_id.copyHashTo(&pkt->payload[1]);   // src hash is the bot, not the repeater
 
   if (to.out_path_len == OUT_PATH_UNKNOWN) {
     sendFloodScoped(default_scope, pkt, 0, _prefs.path_hash_mode + 1);
+    botLog("reply to %s sent by flood%s (txq %d, free %d)", who, attempt ? " (resend)" : "",
+           _mgr->getOutboundTotal(), _mgr->getFreeCount());
   } else {
     sendDirect(pkt, to.out_path, to.out_path_len, 0);
     r.active = r.awaiting_ack = true;
-    r.send_at = futureMillis(BOT_ACK_WAIT_BASE + BOT_ACK_WAIT_HOP * (to.out_path_len & 63));
+    uint32_t wait = BOT_ACK_WAIT_BASE + BOT_ACK_WAIT_HOP * (to.out_path_len & 63);
+    r.send_at = futureMillis(wait);
+    botLog("reply to %s sent direct, %u hops, ack wait %lu s (txq %d, free %d)", who,
+           (uint32_t)(to.out_path_len & 63), (unsigned long)(wait / 1000), _mgr->getOutboundTotal(), _mgr->getFreeCount());
   }
   bot_replies_sent++;
 }
@@ -337,6 +443,8 @@ bool MyMesh::botCheckAck(uint32_t ack_crc) {
     BotPendingReply& r = bot_pending[j];
     if (r.active && r.awaiting_ack && r.expected_ack == ack_crc) {
       r.active = false;   // delivered
+      char who[20];
+      botLog("reply to %s acked: delivered", botWho(bot_contacts[r.contact_idx], who, sizeof(who)));
       return true;
     }
   }
@@ -359,6 +467,7 @@ void MyMesh::botLoop() {
       // no ACK for the direct reply: the stored route is stale, so forget it and flood once
       bot_contacts[r.contact_idx].out_path_len = OUT_PATH_UNKNOWN;
       r.awaiting_ack = false;
+      botLog("no ack for direct reply: route dropped, resending by flood");
       botSendReply(r, 1);
     } else {
       botSendReply(r, 0);
@@ -366,7 +475,7 @@ void MyMesh::botLoop() {
   }
 }
 
-bool MyMesh::handleBotCommand(const char* command, char* reply) {
+bool MyMesh::handleBotCommand(uint32_t sender_timestamp, const char* command, char* reply) {
   if (memcmp(command, "bot", 3) != 0 || (command[3] != 0 && command[3] != ' ')) return false;
   const char* arg = &command[3];
   while (*arg == ' ') arg++;
@@ -402,8 +511,12 @@ bool MyMesh::handleBotCommand(const char* command, char* reply) {
     }
   } else if (strcmp(arg, "key") == 0) {
     mesh::Utils::toHex(reply, bot_id.pub_key, PUB_KEY_SIZE);
+  } else if (memcmp(arg, "log", 3) == 0 && (arg[3] == 0 || arg[3] == ' ')) {
+    const char* a = &arg[3];
+    while (*a == ' ') a++;
+    botLogCommand(sender_timestamp, a, reply);
   } else {
-    strcpy(reply, "Err - usage: bot [on|off|name <name>|name -|advert|key]");
+    strcpy(reply, "Err - usage: bot [on|off|name <name>|name -|advert|key|log [n|clear]]");
   }
   return true;
 }
