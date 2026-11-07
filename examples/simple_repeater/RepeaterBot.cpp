@@ -311,13 +311,16 @@ void MyMesh::botFormatReport(mesh::Packet* pkt, const BotContact& from, char* te
     //   direct-routed:  "~61,0d,c0 -5.0dB -114dBm"   the known route (a direct packet's path is
     //                                                 used up on the way, so show our stored route
     //                                                 to them, reversed)
+    //   direct, route unknown (e.g. after a reboot): "~? -5.0dB -114dBm"
     //   0 hops:         "13.0dB -38dBm"              heard straight from the sender's radio
     const uint8_t* path = NULL;
     uint8_t hops = 0, hs = 1;
     bool reversed = false;
     if (pkt->isRouteDirect()) {
       if (from.out_path_len == OUT_PATH_UNKNOWN) {
-        hops = 0;
+        // routes live in RAM, so after a reboot a direct message can arrive along a route we
+        // don't know: say so, rather than look like "heard straight from the sender"
+        n = snprintf(text, len, "~?");
       } else {
         hops = from.out_path_len & 63;
         hs = (from.out_path_len >> 6) + 1;
