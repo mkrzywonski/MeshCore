@@ -141,7 +141,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   bool botHandleRecv(mesh::Packet* pkt);
   void botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
   void botHandlePath(mesh::Packet* pkt, BotContact& from, uint8_t* data, size_t len);
-  void botFormatReport(mesh::Packet* pkt, char* text, size_t len);
+  void botFormatReport(mesh::Packet* pkt, const BotContact& from, char* text, size_t len);
   void botSendAck(mesh::Packet* pkt, BotContact& to, const uint8_t* ack_hash, uint8_t ack_len);
   void botSendReply(BotPendingReply& r, uint8_t attempt);
   bool botCheckAck(uint32_t ack_crc);

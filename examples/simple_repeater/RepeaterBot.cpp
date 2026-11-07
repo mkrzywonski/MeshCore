@@ -300,31 +300,46 @@ bool MyMesh::botHandleRecv(mesh::Packet* pkt) {
   return false;
 }
 
-void MyMesh::botFormatReport(mesh::Packet* pkt, char* text, size_t len) {
+void MyMesh::botFormatReport(mesh::Packet* pkt, const BotContact& from, char* text, size_t len) {
   float snr = pkt->getSNR();
   int rssi = (int)_radio->getLastRSSI();
   int n = 0;
 
   if (bot_prefs.format == BOT_FORMAT_SHORT) {
-    // "5h 61,36,b4 -3.5dB -110dBm" / "direct -3.5dB -110dBm" / "0h -3.5dB -110dBm"
+    // Path (sender end first) then signal, nothing else:
+    //   flood:          "61,36,b4 -3.5dB -110dBm"    the path this message took
+    //   direct-routed:  "~61,0d,c0 -5.0dB -114dBm"   the known route (a direct packet's path is
+    //                                                 used up on the way, so show our stored route
+    //                                                 to them, reversed)
+    //   0 hops:         "13.0dB -38dBm"              heard straight from the sender's radio
+    const uint8_t* path = NULL;
+    uint8_t hops = 0, hs = 1;
+    bool reversed = false;
     if (pkt->isRouteDirect()) {
-      n = snprintf(text, len, "direct");
-    } else {
-      uint8_t hops = pkt->getPathHashCount();
-      uint8_t hs = pkt->getPathHashSize();
-      n = snprintf(text, len, "%uh", (unsigned)hops);
-      size_t room = len - 24;   // keep space for the signal part
-      for (int h = 0; h < hops && n > 0 && (size_t)n < room; h++) {
-        text[n++] = h == 0 ? ' ' : ',';
-        for (int b = 0; b < hs; b++) {
-          n += snprintf(&text[n], len - n, "%02x", pkt->path[h * hs + b]);
-        }
+      if (from.out_path_len == OUT_PATH_UNKNOWN) {
+        hops = 0;
+      } else {
+        hops = from.out_path_len & 63;
+        hs = (from.out_path_len >> 6) + 1;
+        path = from.out_path;
+        reversed = true;
+        if (hops) text[n++] = '~';
       }
-      if (n > 0 && (size_t)n >= room) n += snprintf(&text[n], len - n, "..");
+    } else {
+      hops = pkt->getPathHashCount();
+      hs = pkt->getPathHashSize();
+      path = pkt->path;
     }
-    if (n > 0 && (size_t)n < len) {
-      snprintf(&text[n], len - n, " %.1fdB %ddBm", snr, rssi);
+    size_t room = len - 24;   // keep space for the signal part
+    for (int i = 0; i < hops && (size_t)n < room; i++) {
+      int h = reversed ? hops - 1 - i : i;
+      if (i > 0) text[n++] = ',';
+      for (int b = 0; b < hs; b++) {
+        n += snprintf(&text[n], len - n, "%02x", path[h * hs + b]);
+      }
     }
+    if (hops && (size_t)n >= room) n += snprintf(&text[n], len - n, "..");
+    snprintf(&text[n], len - n, "%s%.1fdB %ddBm", n ? " " : "", snr, rssi);
     return;
   }
 
@@ -458,7 +473,7 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   slot->awaiting_ack = false;
   slot->timestamp = 0;
   slot->contact_idx = idx;
-  botFormatReport(pkt, slot->text, sizeof(slot->text));
+  botFormatReport(pkt, from, slot->text, sizeof(slot->text));
   if (pkt->isRouteFlood()) {
     // the sender answers our PATH+ACK with a reciprocal path; wait for it so the reply can go direct
     uint32_t wait = BOT_PATH_WAIT_BASE + BOT_PATH_WAIT_HOP * pkt->getPathHashCount();

@@ -75,7 +75,7 @@ struct BotPrefs {
 
 // Reply text. Short keeps packets small: long replies are on air ~3x as long as an ACK and get
 // lost far more often over many hops. Encryption pads to 16-byte blocks, so every 16 chars count.
-#define BOT_FORMAT_SHORT  0    // "5h 61,36,b4 -3.5dB -110dBm"
+#define BOT_FORMAT_SHORT  0    // "61,36,b4 -3.5dB -110dBm", "~61,36,b4 ..." (direct: known route), "13.0dB -38dBm" (0 hops)
 #define BOT_FORMAT_LONG   1    // "Heard you: 5 hops via 61,36,b4 | SNR -3.50 dB RSSI -110 dBm"
 
 #endif
