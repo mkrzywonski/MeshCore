@@ -906,6 +906,7 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
 #ifdef REPEATER_BOT
   memset(&bot_prefs, 0, sizeof(bot_prefs));
   bot_prefs.enabled = 1;
+  bot_prefs.format = BOT_FORMAT_SHORT;
   memset(bot_contacts, 0, sizeof(bot_contacts));
   num_bot_contacts = 0;
   memset(bot_pending, 0, sizeof(bot_pending));

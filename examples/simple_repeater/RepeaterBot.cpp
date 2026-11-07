@@ -3,8 +3,9 @@
 #ifdef REPEATER_BOT
 
 #include <stdarg.h>
+#include <stddef.h>
 
-#define BOT_PREFS_VERSION      1
+#define BOT_PREFS_VERSION      2    // v2 added 'format'; v1 files still load (format = short)
 #define BOT_ACK_DELAY        200
 #define BOT_PATH_WAIT_BASE  2000    // ms to wait for the sender's reciprocal path, plus...
 #define BOT_PATH_WAIT_HOP   2500    // ...this much per hop
@@ -86,7 +87,12 @@ void MyMesh::loadBotPrefs() {
   if (!file) return;
   BotPrefs tmp;
   memset(&tmp, 0, sizeof(tmp));
-  if (file.read((uint8_t *)&tmp, sizeof(tmp)) == sizeof(tmp) && tmp.version == BOT_PREFS_VERSION) {
+  size_t n = file.read((uint8_t *)&tmp, sizeof(tmp));
+  bool ok = (tmp.version == BOT_PREFS_VERSION && n == sizeof(tmp))
+         || (tmp.version == 1 && n >= offsetof(BotPrefs, format));   // v1: no format byte
+  if (ok) {
+    if (tmp.version == 1) tmp.format = BOT_FORMAT_SHORT;
+    if (tmp.format > BOT_FORMAT_LONG) tmp.format = BOT_FORMAT_SHORT;
     tmp.name[sizeof(tmp.name) - 1] = 0;
     bot_prefs = tmp;
   }
@@ -298,6 +304,29 @@ void MyMesh::botFormatReport(mesh::Packet* pkt, char* text, size_t len) {
   float snr = pkt->getSNR();
   int rssi = (int)_radio->getLastRSSI();
   int n = 0;
+
+  if (bot_prefs.format == BOT_FORMAT_SHORT) {
+    // "5h 61,36,b4 -3.5dB -110dBm" / "direct -3.5dB -110dBm" / "0h -3.5dB -110dBm"
+    if (pkt->isRouteDirect()) {
+      n = snprintf(text, len, "direct");
+    } else {
+      uint8_t hops = pkt->getPathHashCount();
+      uint8_t hs = pkt->getPathHashSize();
+      n = snprintf(text, len, "%uh", (unsigned)hops);
+      size_t room = len - 24;   // keep space for the signal part
+      for (int h = 0; h < hops && n > 0 && (size_t)n < room; h++) {
+        text[n++] = h == 0 ? ' ' : ',';
+        for (int b = 0; b < hs; b++) {
+          n += snprintf(&text[n], len - n, "%02x", pkt->path[h * hs + b]);
+        }
+      }
+      if (n > 0 && (size_t)n >= room) n += snprintf(&text[n], len - n, "..");
+    }
+    if (n > 0 && (size_t)n < len) {
+      snprintf(&text[n], len - n, " %.1fdB %ddBm", snr, rssi);
+    }
+    return;
+  }
 
   if (pkt->isRouteDirect()) {
     n = snprintf(text, len, "Heard you via direct route");
@@ -556,9 +585,10 @@ bool MyMesh::handleBotCommand(uint32_t sender_timestamp, const char* command, ch
 
   char name[32];
   if (*arg == 0) {
-    sprintf(reply, "%s: %s, id %02X, contacts %d, rx %lu, tx %lu", getBotName(name, sizeof(name)),
-            bot_prefs.enabled ? "on" : "off", (uint32_t)bot_id.pub_key[0], num_bot_contacts,
-            (unsigned long)bot_msgs_recv, (unsigned long)bot_replies_sent);
+    sprintf(reply, "%s: %s, id %02X, contacts %d (%d saved), rx %lu, tx %lu, %s replies", getBotName(name, sizeof(name)),
+            bot_prefs.enabled ? "on" : "off", (uint32_t)bot_id.pub_key[0], num_bot_contacts, bot_cache_count,
+            (unsigned long)bot_msgs_recv, (unsigned long)bot_replies_sent,
+            bot_prefs.format == BOT_FORMAT_LONG ? "long" : "short");
   } else if (strcmp(arg, "on") == 0 || strcmp(arg, "off") == 0) {
     bot_prefs.enabled = strcmp(arg, "on") == 0;
     if (!bot_prefs.enabled) memset(bot_pending, 0, sizeof(bot_pending));
@@ -609,6 +639,17 @@ bool MyMesh::handleBotCommand(uint32_t sender_timestamp, const char* command, ch
         sprintf(reply, "OK - %s learned and saved", botWho(c, who, sizeof(who)));
       }
     }
+  } else if (memcmp(arg, "format", 6) == 0 && (arg[6] == 0 || arg[6] == ' ')) {
+    const char* f = &arg[6];
+    while (*f == ' ') f++;
+    if (*f == 0) {
+      sprintf(reply, "> %s", bot_prefs.format == BOT_FORMAT_LONG ? "long" : "short");
+    } else if (strcmp(f, "short") == 0 || strcmp(f, "long") == 0) {
+      bot_prefs.format = strcmp(f, "long") == 0 ? BOT_FORMAT_LONG : BOT_FORMAT_SHORT;
+      strcpy(reply, saveBotPrefs() ? "OK" : "Err - save failed");
+    } else {
+      strcpy(reply, "Err - usage: bot format [short|long]");
+    }
   } else if (strcmp(arg, "cache") == 0) {
     int n = sprintf(reply, "%d/%d saved:", bot_cache_count, BOT_CACHE_SIZE);
     for (int i = 0; i < bot_cache_count && n < 140; i++) {
@@ -624,7 +665,7 @@ bool MyMesh::handleBotCommand(uint32_t sender_timestamp, const char* command, ch
     while (*a == ' ') a++;
     botLogCommand(sender_timestamp, a, reply);
   } else {
-    strcpy(reply, "Err - usage: bot [on|off|name <n>|name -|advert|key|learn <key> [name]|cache [clear]|log [n|clear]]");
+    strcpy(reply, "Err - usage: bot [on|off|name <n>|name -|advert|key|format [short|long]|learn <key> [name]|cache [clear]|log [n|clear]]");
   }
   return true;
 }
