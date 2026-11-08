@@ -47,6 +47,39 @@ never appears in the path, because it's the one receiving the message. Neither d
 `bot format long` switches to sentences, for example
 `Heard you: 3 hops via 61,36,b4 | SNR -3.50 dB RSSI -110 dBm`.
 
+### What SNR and RSSI mean
+
+The two numbers at the end of a reply describe the **last hop only**: how well the bot's repeater heard the radio
+that handed it your message. That's your own radio if there were no relays, otherwise the last repeater in the path.
+
+- **RSSI** (Received Signal Strength Indicator, in dBm) is how strong the signal was when it arrived. It's always
+  negative: -60 dBm is very strong, -110 dBm is weak, and around -120 dBm and below is close to what the radio can
+  hear at all. RSSI counts everything on the channel, so local interference raises it too.
+- **SNR** (Signal-to-Noise Ratio, in dB) is how far the signal stood above the background noise. **This is the
+  better guide to whether a link works.** LoRa can decode signals that are weaker than the noise, so a negative SNR
+  is normal, but there's a floor: around -7.5 dB with the common SF7 settings, and lower with higher spreading
+  factors (about -20 dB at SF12).
+
+Rough guide for SF7:
+
+| SNR | Link |
+|---|---|
+| Above +5 dB | Strong: plenty of margin |
+| 0 to +5 dB | Good |
+| -5 to 0 dB | Workable; some packets may be lost |
+| Below -5 dB | Marginal, close to the floor: expect losses |
+
+How to read the two together:
+
+- **Good SNR, weak RSSI:** a quiet location and a distant transmitter. Usually fine.
+- **Strong RSSI, poor SNR:** something nearby is noisy (electronics, other transmitters), drowning out a signal
+  that would otherwise be fine. Moving the antenna away from the noise often helps more than more power.
+- **Both weak:** the link is at its limit. Height, a better antenna, or a clearer line of sight helps most.
+
+Links aren't symmetric. Your radio may hear the repeater better or worse than the repeater hears you, and the reply
+may come back along a different route. A reply arriving at all is the real test of two-way connectivity; the numbers
+tell you how much margin the last hop had.
+
 ## How it works
 
 - **Knowing who you are.** To decrypt a message, the bot needs the sender's public key. It learns keys from chat
