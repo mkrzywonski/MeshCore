@@ -190,6 +190,15 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
+### List the available commands (Repeater Only)
+**Usage:**
+- `help`, or
+- `?`
+
+**Note:** Over the serial console this prints the full command list, grouped by topic. Over remote admin, where a reply has to fit in one packet, it returns a short list of the most common commands.
+
+---
+
 ### Show the hardware name
 **Usage:** `board`
 
