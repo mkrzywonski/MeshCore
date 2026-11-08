@@ -12,7 +12,7 @@ Generated from `examples/simple_repeater/HelpText.cpp`; regenerate after changin
 
 ```
 > help
-Topics: info node time lora routing adverts access system regions gps sensors bot. Send help <topic>, or help <command> for usage
+Topics: info node timekeeping lora routing adverts access system regions gps sensors bot. Send help <topic>, or help <command> for usage
 ```
 
 ## info
@@ -119,11 +119,11 @@ get public.key - this node's public key (64 hex)
 get|set prv.key <128 hex> - identity private key. get: USB serial only. set: reboot to apply
 ```
 
-## time
+## timekeeping
 
 ```
-> help time
-time: clock, clock sync, time <epoch secs>, clock.source, clkreboot
+> help timekeeping
+timekeeping: clock, clock sync, time, clock.source, clkreboot
 ```
 
 ```
@@ -136,10 +136,8 @@ clock - show the time (UTC)
 clock sync - set the clock to the sender's time (your phone, in the app). Forward only
 ```
 
-`help time` shows the topic, so ask with `help time <epoch secs>`:
-
 ```
-> help time <epoch secs>
+> help time
 time <epoch secs> - set the clock to a Unix time. Forward only
 ```
 
