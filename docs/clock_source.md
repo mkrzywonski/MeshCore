@@ -24,6 +24,7 @@ Only timestamps that provably come from the source's key:
 - its **adverts**, which are signed
 - **logins**, **requests** and **CLI messages** it sends to this repeater, which are encrypted with a key only
   the source and this repeater can compute
+- **direct messages to the [repeater bot](repeater_bot.md)**, when the bot is built in
 
 A good source is a nearby repeater that rarely reboots and whose clock you keep right, for example one on mains
 power. A companion works too, but companions only advertise when their owner asks them to.
