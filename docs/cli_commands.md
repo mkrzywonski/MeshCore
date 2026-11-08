@@ -191,10 +191,15 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ### List the available commands (Repeater Only)
 **Usage:**
-- `help`, or
-- `?`
+- `help`, or `?`
+- `help <topic>`
+- `help <command>`
 
-**Note:** Over the serial console this prints the full command list, grouped by topic. Over remote admin, where a reply has to fit in one packet, it returns a short list of the most common commands.
+**Parameters:**
+- `topic`: `info`, `node`, `time`, `radio`, `routing`, `adverts`, `access`, `system`, `regions`, `gps`, `sensors` (plus `bridge` when built in)
+- `command`: any command or setting, with or without `get`/`set`, e.g. `help txdelay`, `help get radio`, `help region put`
+
+**Note:** Over the serial console, `help` prints every command grouped by topic (`*` marks commands that only work over serial), and `help <topic>` prints the usage of each command in it. Over remote admin, where a reply has to fit in one packet, `help` lists the topics, `help <topic>` lists the commands that work remotely, and `help <command>` shows that command's usage.
 
 ---
 
