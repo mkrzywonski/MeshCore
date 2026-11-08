@@ -316,7 +316,7 @@ password <new> - set the admin password (the reply shows it)
 
 ```
 > help guest.password
-get|set guest.password <pw> - password for guest logins, empty = none
+get|set guest.password <pw> - guest logins (status, neighbors, owner info). Empty: anyone can log in as guest
 ```
 
 ```
