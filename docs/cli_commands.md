@@ -20,6 +20,7 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
   - [Sensors](#sensors-when-sensor-support-is-compiled-in)
   - [Bridge](#bridge-when-bridge-support-is-compiled-in)
   - [Ethernet](#ethernet-when-ethernet-support-is-compiled-in)
+  - [Repeater Bot](#repeater-bot-when-built-with-repeater_bot)
 
 ---
 
@@ -1196,3 +1197,20 @@ Ethernet support is available on RAK4631 boards with a RAK13800 (W5100S) Etherne
 - Connect with any TCP client (e.g. `nc`, PuTTY) to access the same CLI available over serial.
 
 ---
+
+---
+
+### Repeater Bot (when built with REPEATER_BOT)
+
+A test bot inside the repeater that answers direct messages with the path and signal it heard them with. See [Repeater Bot](repeater_bot.md) for how it works.
+
+**Usage:**
+- `bot`
+- `bot on`, `bot off`
+- `bot name <name>`, `bot name -`
+- `bot advert`
+- `bot key`
+- `bot format [short|long]`
+- `bot learn <public_key> [name]`
+- `bot cache`, `bot cache clear`
+- `bot log [n|clear]`
