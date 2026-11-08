@@ -72,6 +72,21 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
+### Follow a trusted node's clock (Repeater Only)
+**Usage:**
+- `get clock.source`
+- `set clock.source <public_key>`
+- `set clock.source off`
+
+**Parameters:**
+- `public_key`: The trusted node's full public key (64 hex characters)
+
+**Default:** `off`
+
+**Note:** Authenticated timestamps from that node (its signed adverts, and logins, requests and CLI messages it sends to this repeater) step the clock forward, so a repeater without a clock chip gets the right time back after a reboot. The clock never goes backwards; steps under 5 seconds and over 7 days are ignored, except that any step is accepted while the clock is unset. See [Trusted Clock Source](clock_source.md).
+
+---
+
 ### Send a flood advert
 **Usage:** 
 - `advert`
