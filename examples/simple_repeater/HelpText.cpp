@@ -53,6 +53,7 @@ static const HelpEntry entries[] = {
   { T_TIME, 0, "clock", "clock", "show the time (UTC)" },
   { T_TIME, 0, "clock sync", "clock sync", "set the clock to the sender's time (your phone, in the app). Forward only" },
   { T_TIME, 0, "time", "time <epoch secs>", "set the clock to a Unix time. Forward only" },
+  { T_TIME, 0, "clock.source", "get|set clock.source <64 hex pubkey>|off", "follow a trusted node's clock (see docs/clock_source.md)" },
   { T_TIME, 0, "clkreboot", "clkreboot", "reset the clock to 2024 and reboot (undoes a clock set in the future)" },
 
   // radio
@@ -137,6 +138,20 @@ static const HelpEntry entries[] = {
   { T_SENSORS, 0, "sensor list", "sensor list [start]", "sensor settings and values" },
   { T_SENSORS, 0, "sensor get", "sensor get <key>", "one sensor setting" },
   { T_SENSORS, 0, "sensor set", "sensor set <key> <value>", "change a sensor setting" },
+
+#ifdef REPEATER_BOT
+  // bot (docs/repeater_bot.md)
+  { T_BOT, 0, "bot", "bot", "status: on/off, id, contacts, messages in/out, reply format" },
+  { T_BOT, 0, "bot on", "bot on|off", "turn the bot on or off" },
+  { T_BOT, 0, "bot off", "bot on|off", "turn the bot on or off" },
+  { T_BOT, 0, "bot name", "bot name [<name>|-]", "show or set the bot's name; - = \"<repeater name> Bot\"" },
+  { T_BOT, 0, "bot advert", "bot advert", "send a flood advert for the bot" },
+  { T_BOT, 0, "bot key", "bot key", "the bot's public key" },
+  { T_BOT, 0, "bot format", "bot format [short|long]", "reply style; short fits long paths better" },
+  { T_BOT, 0, "bot learn", "bot learn <64 hex pubkey> [name]", "add a contact whose adverts don't reach the bot" },
+  { T_BOT, 0, "bot cache", "bot cache [clear]", "contacts saved to flash (kept across reboots), or forget them" },
+  { T_BOT, 0, "bot log", "bot log [n|clear]", "what the bot did; remote: n-th newest entry (default 1), serial: all" },
+#endif
 
 #ifdef WITH_BRIDGE
   // bridge
