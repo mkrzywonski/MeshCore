@@ -1,4 +1,5 @@
 #include "MyMesh.h"
+#include "HelpText.h"
 #include <algorithm>
 
 /* ------------------------------ Config -------------------------------- */
@@ -1245,6 +1246,11 @@ void MyMesh::clearStats() {
   ((SimpleMeshTables *)getTables())->resetStats();
 }
 
+static void helpEmit(const char* line) {
+  Serial.print(line);
+  Serial.print("\r\n");
+}
+
 void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply) {
   if (region_load_active) {
     if (StrHelper::isBlank(command)) {  // empty/blank line, signal to terminate 'load' operation
@@ -1288,39 +1294,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
-  if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
-    if (sender_timestamp == 0) {  // serial: full list (too long for a single reply)
-      Serial.println(
-        "Info:    ver, board, clock, stats-core, stats-radio, stats-packets, clear stats,\r\n"
-        "         neighbors, get acl, log, log start|stop|erase\r\n"
-        "Time:    clock sync, time <epoch secs>, get clock.source,\r\n"
-        "         set clock.source <64 hex pubkey>|off  (follow a trusted node's clock)\r\n"
-        "Adverts: advert, advert.zerohop, discover.neighbors\r\n"
-        "Admin:   password <pw>, setperm <pubkey> <perms>, neighbor.remove <pubkey>,\r\n"
-        "         reboot, clkreboot, poweroff, erase, start ota\r\n"
-        "Radio:   get|set radio <freq>,<bw>,<sf>,<cr>   get|set tx <dBm>, tempradio ...\r\n"
-        "         get|set af, rxdelay, txdelay, direct.txdelay, dutycycle, cad,\r\n"
-        "         int.thresh, agc.reset.interval, multi.acks, path.hash.mode, radio.rxgain\r\n"
-        "Config:  get|set name, lat, lon, owner.info, repeat on|off, guest.password,\r\n"
-        "         advert.interval <min>, flood.advert.interval <hrs>, flood.max,\r\n"
-        "         flood.max.advert, flood.max.unscoped, loop.detect, allow.read.only,\r\n"
-        "         adc.multiplier, bridge.*;  get public.key, prv.key, role, freq\r\n"
-        "Other:   region ..., gps ..., sensor list|get|set, powersaving on|off, power"
-#ifdef REPEATER_BOT
-        "\r\nBot:     bot, bot on|off, bot name <name>|-, bot advert, bot key,\r\n"
-        "         bot format [short|long], bot learn <64 hex pubkey> [name],\r\n"
-        "         bot cache [clear], bot log [n|clear]"
-#endif
-      );
-      reply[0] = 0;
-    } else {  // remote admin: replies are limited to one short packet
-      strcpy(reply, "ver clock time neighbors advert reboot "
-                    "get|set name|radio|tx|lat|lon|repeat"
-#ifdef REPEATER_BOT
-                    " bot"
-#endif
-                    " (stats: app Status screen; full list: help on serial)");
-    }
+  if ((memcmp(command, "help", 4) == 0 && (command[4] == 0 || command[4] == ' '))
+      || (command[0] == '?' && (command[1] == 0 || command[1] == ' '))) {
+    // serial: full lists; remote (app): topics and per-command usage, each reply one packet
+    helpCommand(command[0] == '?' ? &command[1] : &command[4], sender_timestamp == 0, helpEmit, reply);
     return;
   }
 
