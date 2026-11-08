@@ -1314,12 +1314,12 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       );
       reply[0] = 0;
     } else {  // remote admin: replies are limited to one short packet
-      strcpy(reply, "ver clock time stats-core|radio|packets neighbors advert reboot "
+      strcpy(reply, "ver clock time neighbors advert reboot "
                     "get|set name|radio|tx|lat|lon|repeat"
 #ifdef REPEATER_BOT
                     " bot"
 #endif
-                    " (full list: help on serial)");
+                    " (stats: app Status screen; full list: help on serial)");
     }
     return;
   }
