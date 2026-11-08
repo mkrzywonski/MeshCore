@@ -93,7 +93,7 @@ static const HelpEntry entries[] = {
 
   // access
   { T_ACCESS, 0, "password", "password <new>", "set the admin password (the reply shows it)" },
-  { T_ACCESS, 0, "guest.password", "get|set guest.password <pw>", "password for guest logins, empty = none" },
+  { T_ACCESS, 0, "guest.password", "get|set guest.password <pw>", "guest logins (status, neighbors, owner info). Empty: anyone can log in as guest" },
   { T_ACCESS, 0, "setperm", "setperm <pubkey> <0-3>", "client access: 0 guest (removes), 1 read-only, 2 read-write, 3 admin" },
   { T_ACCESS, H_USB, "acl", "get acl", "list clients and their permissions" },
   { T_ACCESS, 0, "allow.read.only", "get|set allow.read.only on|off", "room servers only; no effect on a repeater" },
