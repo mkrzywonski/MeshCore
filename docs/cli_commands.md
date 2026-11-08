@@ -83,7 +83,7 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 **Default:** `off`
 
-**Note:** Authenticated timestamps from that node (its signed adverts, and logins, requests and CLI messages it sends to this repeater) step the clock forward, so a repeater without a clock chip gets the right time back after a reboot. The clock never goes backwards; steps under 5 seconds and over 7 days are ignored, except that any step is accepted while the clock is unset. See [Trusted Clock Source](clock_source.md).
+**Note:** Authenticated timestamps from that node (its signed adverts, and logins, requests and CLI messages it sends to this repeater) step the clock forward, so a repeater without a clock chip gets the right time back after a reboot. While this repeater's clock is unset (earlier than its firmware's build time, e.g. after a reboot), any forward step is accepted. Once it's set, steps under 5 seconds or over 7 days are ignored. The clock never goes backwards. See [Trusted Clock Source](clock_source.md).
 
 ---
 
