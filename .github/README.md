@@ -33,8 +33,9 @@ ignored as stale. → [Trusted Clock Source](../docs/clock_source.md)
 
 ### `help` command
 
-`help` or `?` on the repeater console lists the available commands, grouped by topic. Over remote admin it returns a
-short list. → [CLI Commands](../docs/cli_commands.md#list-the-available-commands-repeater-only)
+`help` or `?` lists every command, grouped by topic (radio, time, routing, bot, ...). `help <topic>` lists a topic's
+commands and `help <command>` shows its usage. Over remote admin from the app, every reply fits in one packet, and
+commands that only work over USB serial are left out. → [CLI Commands](../docs/cli_commands.md#list-the-available-commands-repeater-only)
 
 ## Branches
 
