@@ -152,6 +152,17 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   bool handleBotCommand(uint32_t sender_timestamp, const char* command, char* reply);
 #endif
 
+  // trusted clock source ("set clock.source <pubkey>"), see ClockSource.cpp
+  uint8_t clock_src_key[PUB_KEY_SIZE];
+  bool has_clock_src;
+  uint32_t clock_src_heard, clock_src_synced, clock_src_syncs, clock_src_rejects;
+  int32_t clock_src_diff, clock_src_step;
+  char clock_src_via;
+  void loadClockSource();
+  bool saveClockSource();
+  void checkClockSource(const mesh::Identity& id, uint32_t timestamp, char via);
+  bool handleClockSourceCommand(const char* command, char* reply);
+
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
   uint8_t handleLoginReq(const mesh::Identity& sender, const uint8_t* secret, uint32_t sender_timestamp, const uint8_t* data, bool is_flood);
   uint8_t handleAnonRegionsReq(const mesh::Identity& sender, uint32_t sender_timestamp, const uint8_t* data);
