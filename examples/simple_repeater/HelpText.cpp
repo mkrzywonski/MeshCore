@@ -10,7 +10,7 @@ enum {
 };
 
 static const char* const topic_names[T_COUNT] = {
-  "info", "node", "time", "radio", "routing", "adverts", "access", "system", "regions",
+  "info", "node", "time", "lora", "routing", "adverts", "access", "system", "regions",
   "gps", "sensors", "bridge", "bot"
 };
 
