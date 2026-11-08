@@ -36,7 +36,7 @@ void MyMesh::botLog(const char* fmt, ...) {
   vsnprintf(e.msg, sizeof(e.msg), fmt, args);
   va_end(args);
 #if MESH_PACKET_LOGGING
-  Serial.printf("BOT %02lu:%02lu:%02lu %s\n", (unsigned long)(e.time / 3600 % 24),
+  Serial.printf("BOT %02lu:%02lu:%02lu %s\r\n", (unsigned long)(e.time / 3600 % 24),
                 (unsigned long)(e.time / 60 % 60), (unsigned long)(e.time % 60), e.msg);
 #endif
 }
@@ -61,7 +61,7 @@ void MyMesh::botLogCommand(uint32_t sender_timestamp, const char* arg, char* rep
   if (sender_timestamp == 0 && *arg == 0) {   // serial console: dump it all
     for (int i = bot_log_count; i >= 1; i--) {
       const BotLogEntry& e = bot_log[(bot_log_next + BOT_LOG_SIZE - i) % BOT_LOG_SIZE];
-      Serial.printf("  %02lu:%02lu:%02lu %s\n", (unsigned long)(e.time / 3600 % 24),
+      Serial.printf("  %02lu:%02lu:%02lu %s\r\n", (unsigned long)(e.time / 3600 % 24),
                     (unsigned long)(e.time / 60 % 60), (unsigned long)(e.time % 60), e.msg);
     }
     sprintf(reply, "%d entries (times UTC)", bot_log_count);
