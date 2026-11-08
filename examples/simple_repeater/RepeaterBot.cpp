@@ -405,6 +405,7 @@ void MyMesh::botHandleText(mesh::Packet* pkt, BotContact& from, uint8_t* data, s
   if (len <= 5) return;
   uint32_t sender_timestamp;
   memcpy(&sender_timestamp, data, 4);
+  checkClockSource(from.id, sender_timestamp, 'B');
   uint8_t flags = data[4] >> 2;
   if (flags != TXT_TYPE_PLAIN) return;   // CLI and signed messages are not for us
 

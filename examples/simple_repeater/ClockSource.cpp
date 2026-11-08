@@ -2,7 +2,7 @@
 
 // Trusted clock source: "set clock.source <pubkey>" names one node whose timestamps this repeater trusts.
 // Whenever an authenticated packet from that node arrives with a timestamp (its signed adverts, or a
-// login/request/CLI message it sends us), the clock is stepped forward to it, within sane limits:
+// login/request/CLI message/bot DM it sends us), the clock is stepped forward to it, within sane limits:
 //
 //  - Forward only. The mesh needs each node's timestamps to keep increasing, so the clock never goes back.
 //  - Differences under CLOCK_SRC_MIN_STEP are ignored: they're just the time the packet spent in transit.
@@ -87,6 +87,9 @@ void MyMesh::checkClockSource(const mesh::Identity& id, uint32_t timestamp, char
   clock_src_step = clock_src_diff;
   clock_src_diff = 0;
   clock_src_syncs++;
+#ifdef REPEATER_BOT
+  botLog("clock stepped %+ld s from clock source (%c)", (long)clock_src_step, via);
+#endif
 }
 
 static const char* clockSrcVia(char via) {

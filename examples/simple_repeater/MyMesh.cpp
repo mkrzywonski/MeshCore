@@ -1293,7 +1293,8 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       Serial.println(
         "Info:    ver, board, clock, stats-core, stats-radio, stats-packets, clear stats,\r\n"
         "         neighbors, get acl, log, log start|stop|erase\r\n"
-        "Time:    clock sync, time <epoch secs>\r\n"
+        "Time:    clock sync, time <epoch secs>, get clock.source,\r\n"
+        "         set clock.source <64 hex pubkey>|off  (follow a trusted node's clock)\r\n"
         "Adverts: advert, advert.zerohop, discover.neighbors\r\n"
         "Admin:   password <pw>, setperm <pubkey> <perms>, neighbor.remove <pubkey>,\r\n"
         "         reboot, clkreboot, poweroff, erase, start ota\r\n"
@@ -1305,11 +1306,19 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
         "         flood.max.advert, flood.max.unscoped, loop.detect, allow.read.only,\r\n"
         "         adc.multiplier, bridge.*;  get public.key, prv.key, role, freq\r\n"
         "Other:   region ..., gps ..., sensor list|get|set, powersaving on|off, power"
+#ifdef REPEATER_BOT
+        "\r\nBot:     bot, bot on|off, bot name <name>|-, bot advert, bot key,\r\n"
+        "         bot format [short|long], bot learn <64 hex pubkey> [name],\r\n"
+        "         bot cache [clear], bot log [n|clear]"
+#endif
       );
       reply[0] = 0;
     } else {  // remote admin: replies are limited to one short packet
       strcpy(reply, "ver clock time stats-core|radio|packets neighbors advert reboot "
                     "get|set name|radio|tx|lat|lon|repeat"
+#ifdef REPEATER_BOT
+                    " bot"
+#endif
                     " (full list: help on serial)");
     }
     return;
