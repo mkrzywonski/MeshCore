@@ -33,7 +33,7 @@ ignored as stale. → [Trusted Clock Source](../docs/clock_source.md)
 
 ### `help` command
 
-`help` or `?` lists every command, grouped by topic (radio, time, routing, bot, ...). `help <topic>` lists a topic's
+`help` or `?` lists every command, grouped by topic (lora, time, routing, bot, ...). `help <topic>` lists a topic's
 commands and `help <command>` shows its usage. Over remote admin from the app, every reply fits in one packet, and
 commands that only work over USB serial are left out. → [CLI Commands](../docs/cli_commands.md#list-the-available-commands-repeater-only)
 

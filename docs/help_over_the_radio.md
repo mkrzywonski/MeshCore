@@ -12,7 +12,7 @@ Generated from `examples/simple_repeater/HelpText.cpp`; regenerate after changin
 
 ```
 > help
-Topics: info node time radio routing adverts access system regions gps sensors bot. Send help <topic>, or help <command> for usage
+Topics: info node time lora routing adverts access system regions gps sensors bot. Send help <topic>, or help <command> for usage
 ```
 
 ## info
@@ -153,17 +153,15 @@ get|set clock.source <64 hex pubkey>|off - follow a trusted node's clock (see do
 clkreboot - reset the clock to 2024 and reboot (undoes a clock set in the future)
 ```
 
-## radio
+## lora
+
+```
+> help lora
+lora: radio, freq, tx, tempradio, af, dutycycle, cad, int.thresh, radio.rxgain, agc.reset.interval
+```
 
 ```
 > help radio
-radio: get|set radio <freq>,<bw>,<sf>,<cr>, freq, tx, tempradio, af, dutycycle, cad, int.thresh, radio.rxgain, agc.reset.interval
-```
-
-`help radio` shows the topic, so ask with `help get radio`:
-
-```
-> help get radio
 get|set radio <freq>,<bw>,<sf>,<cr> - LoRa settings, e.g. 910.525,62.5,7,5. Reboot to apply
 ```
 
