@@ -121,7 +121,7 @@ bool MyMesh::handleClockSourceCommand(const char* command, char* reply) {
                    clockSrcVia(clock_src_via), (long)clock_src_diff);
       if (clock_src_syncs > 0) {
         DateTime s(clock_src_synced);
-        n += sprintf(&reply[n], ", %lu steps, last %+lds at %02d:%02d", (unsigned long)clock_src_syncs,
+        n += sprintf(&reply[n], ", stepped %lux, last %+lds at %02d:%02d", (unsigned long)clock_src_syncs,
                      (long)clock_src_step, s.hour(), s.minute());
       }
       if (clock_src_rejects > 0) sprintf(&reply[n], ", %lu rejected", (unsigned long)clock_src_rejects);
