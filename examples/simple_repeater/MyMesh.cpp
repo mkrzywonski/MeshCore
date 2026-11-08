@@ -1238,6 +1238,33 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
+  if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0) {
+    if (sender_timestamp == 0) {  // serial: full list (too long for a single reply)
+      Serial.println(
+        "Info:    ver, board, clock, stats-core, stats-radio, stats-packets, clear stats,\r\n"
+        "         neighbors, get acl, log, log start|stop|erase\r\n"
+        "Time:    clock sync, time <epoch secs>\r\n"
+        "Adverts: advert, advert.zerohop, discover.neighbors\r\n"
+        "Admin:   password <pw>, setperm <pubkey> <perms>, neighbor.remove <pubkey>,\r\n"
+        "         reboot, clkreboot, poweroff, erase, start ota\r\n"
+        "Radio:   get|set radio <freq>,<bw>,<sf>,<cr>   get|set tx <dBm>, tempradio ...\r\n"
+        "         get|set af, rxdelay, txdelay, direct.txdelay, dutycycle, cad,\r\n"
+        "         int.thresh, agc.reset.interval, multi.acks, path.hash.mode, radio.rxgain\r\n"
+        "Config:  get|set name, lat, lon, owner.info, repeat on|off, guest.password,\r\n"
+        "         advert.interval <min>, flood.advert.interval <hrs>, flood.max,\r\n"
+        "         flood.max.advert, flood.max.unscoped, loop.detect, allow.read.only,\r\n"
+        "         adc.multiplier, bridge.*;  get public.key, prv.key, role, freq\r\n"
+        "Other:   region ..., gps ..., sensor list|get|set, powersaving on|off, power"
+      );
+      reply[0] = 0;
+    } else {  // remote admin: replies are limited to one short packet
+      strcpy(reply, "ver clock time stats-core|radio|packets neighbors advert reboot "
+                    "get|set name|radio|tx|lat|lon|repeat"
+                    " (full list: help on serial)");
+    }
+    return;
+  }
+
   // handle ACL related commands
   if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
     char* hex = &command[8];
