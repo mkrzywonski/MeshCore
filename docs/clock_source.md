@@ -30,20 +30,25 @@ power. A companion works too, but companions only advertise when their owner ask
 
 ## Limits
 
-| Situation | What happens |
-|---|---|
-| Source is ahead by less than 5 s | Ignored: that's just the time the packet spent in transit |
-| Source is ahead by 5 s to 7 days | Clock steps forward to the source's time |
-| Source is ahead by more than 7 days | Rejected (counted in `get clock.source`) |
-| Source is behind | Ignored: the clock never goes backwards |
-| This repeater's clock is unset (earlier than its firmware's build time) | Any source time from the build time up to about 10 years after it is accepted |
+The repeater first checks whether its own clock is set at all. A clock earlier than the date its firmware was built
+can't be right, so it counts as **unset**. That's the normal state right after a reboot on a board without a clock
+chip.
 
+| This repeater's clock | Source's time | What happens |
+|---|---|---|
+| **Unset** (earlier than the firmware's build time) | From the build time up to about 10 years after it | Clock jumps to the source's time, however far that is |
+| Set | Ahead by less than 5 s | Ignored: that's just the time the packet spent in transit |
+| Set | Ahead by 5 s to 7 days | Clock steps forward to the source's time |
+| Set | Ahead by more than 7 days | Rejected (counted in `get clock.source`) |
+| Either | Behind | Ignored: the clock never goes backwards |
+
+- **Unset clock:** after a reboot the clock is years behind, so there's no step limit until it's set. This is what
+  lets a repeater recover by itself.
+- **7-day limit, once set:** protects against a source that was set far into the future by mistake. A clock can't be
+  wound back except by `clkreboot`, so following such a source would be hard to undo.
 - **Forward only:** the mesh only needs each node's timestamps to keep increasing, and going backwards would make
   other nodes ignore this one. It also means old packets from the source, replayed by someone else, can't move the
   clock.
-- **7-day limit:** protects against a source that was set far into the future by mistake. A clock can't be wound
-  back except by `clkreboot`, so following such a source would be hard to undo.
-- **Unset clock:** after a reboot the clock is years behind, so the 7-day limit doesn't apply until it's set.
 
 ## Commands
 
