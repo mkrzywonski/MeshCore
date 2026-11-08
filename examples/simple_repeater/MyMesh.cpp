@@ -574,6 +574,7 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
                                                            // client (unknown at this stage)
     uint32_t timestamp;
     memcpy(&timestamp, data, 4);
+    checkClockSource(sender, timestamp, (data[4] == 0 || data[4] >= ' ') ? 'L' : 'R');
 
     data[len] = 0;  // ensure null terminator
     uint8_t reply_len;
@@ -650,6 +651,7 @@ static bool isShare(const mesh::Packet *packet) {
 void MyMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, uint32_t timestamp,
                           const uint8_t *app_data, size_t app_data_len) {
   mesh::Mesh::onAdvertRecv(packet, id, timestamp, app_data, app_data_len); // chain to super impl
+  checkClockSource(id, timestamp, 'A');   // adverts are signed, so the timestamp is authentic
 
   // if this a zero hop advert (and not via 'Share'), add it to neighbours
   if (packet->getPathHashCount() == 0 && !isShare(packet)) {
@@ -668,6 +670,12 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
     return;
   }
   ClientInfo* client = acl.getClientByIdx(i);
+
+  if (len >= 4) {
+    uint32_t ts;
+    memcpy(&ts, data, 4);
+    checkClockSource(client->id, ts, type == PAYLOAD_TYPE_REQ ? 'R' : 'M');
+  }
 
   if (type == PAYLOAD_TYPE_REQ) { // request (from a Known admin client!)
     uint32_t timestamp;
@@ -882,6 +890,10 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _logging = false;
   region_load_active = false;
   recv_pkt_region = NULL;
+  has_clock_src = false;
+  clock_src_heard = clock_src_synced = clock_src_syncs = clock_src_rejects = 0;
+  clock_src_diff = clock_src_step = 0;
+  clock_src_via = 0;
 
 #if MAX_NEIGHBOURS
   memset(neighbours, 0, sizeof(neighbours));
@@ -948,6 +960,7 @@ void MyMesh::begin(FILESYSTEM *fs) {
   // load persisted prefs
   _cli.loadPrefs(_fs);
   acl.load(_fs, self_id);
+  loadClockSource();
   // TODO: key_store.begin();
   region_map.load(_fs);
 
@@ -1237,6 +1250,8 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     reply += 3;
     command += 3;
   }
+
+  if (handleClockSourceCommand(command, reply)) return;
 
   // handle ACL related commands
   if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
