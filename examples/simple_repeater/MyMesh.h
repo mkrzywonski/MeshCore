@@ -171,7 +171,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   bool saveWatchdog();
   void startWatchdog();
   void watchdogLoop();
-  bool handleWatchdogCommand(const char* command, char* reply);
+  bool handleWatchdogCommand(uint32_t sender_timestamp, const char* command, char* reply);
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
   uint8_t handleLoginReq(const mesh::Identity& sender, const uint8_t* secret, uint32_t sender_timestamp, const uint8_t* data, bool is_flood);
