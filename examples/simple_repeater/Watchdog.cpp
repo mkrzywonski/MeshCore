@@ -103,7 +103,50 @@ static void formatAgo(char* dest, unsigned long ms) {
   else sprintf(dest, "%luh", s / 3600);
 }
 
-bool MyMesh::handleWatchdogCommand(const char* command, char* reply) {
+#ifdef WATCHDOG_TEST
+// Test-only commands (build flag WATCHDOG_TEST, USB serial only) that stop the firmware on purpose,
+// each in a different way, so the watchdog can be seen to bring it back. Never in a normal build.
+static void wdtestAnnounce(const char* what) {
+  Serial.print("  -> "); Serial.println(what);
+  Serial.flush();
+  delay(200);
+}
+
+static bool handleWatchdogTest(const char* arg, char* reply) {
+  if (strcmp(arg, "spin") == 0) {          // stuck in a loop, CPU busy
+    wdtestAnnounce("spinning forever; the watchdog should reset the chip");
+    volatile uint32_t n = 0;
+    while (true) { n++; }
+  }
+  if (strcmp(arg, "block") == 0) {         // deadlock: main loop never runs again, CPU idles/sleeps
+    wdtestAnnounce("main loop blocked forever (CPU idle); the watchdog should reset the chip");
+#if defined(NRF52_PLATFORM)
+    vTaskSuspend(NULL);                    // suspends the loop task; other tasks and idle keep running
+#endif
+    while (true) { delay(1000); }
+  }
+  if (strcmp(arg, "fault") == 0) {         // crash: write to an invalid address
+    wdtestAnnounce("writing to an invalid address (hard fault)");
+    *(volatile uint32_t *)0xFFFFFFF0 = 1;
+    while (true) { }
+  }
+  strcpy(reply, "ERR: wdtest spin|block|fault");
+  return true;
+}
+#endif
+
+bool MyMesh::handleWatchdogCommand(uint32_t sender_timestamp, const char* command, char* reply) {
+#ifdef WATCHDOG_TEST
+  if (memcmp(command, "wdtest", 6) == 0 && (command[6] == 0 || command[6] == ' ')) {
+    if (sender_timestamp != 0) {
+      strcpy(reply, "ERR: USB serial only");
+      return true;
+    }
+    const char* arg = &command[6];
+    while (*arg == ' ') arg++;
+    return handleWatchdogTest(arg, reply);
+  }
+#endif
   if (strcmp(command, "get watchdog") == 0) {
     uint32_t running = board.getWatchdogSecs();
     int n;

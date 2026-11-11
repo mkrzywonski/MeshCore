@@ -47,6 +47,23 @@ shows the time since the last packet and how many times it has rebooted the node
 > 30min, last rx 4s ago, 0 reboots
 ```
 
+## Testing
+
+A build with `-D WATCHDOG_TEST` adds commands that stop the firmware on purpose, each a different way. They
+work over USB serial only, and a normal build doesn't contain them.
+
+| Command | What it does | Imitates |
+|---|---|---|
+| `wdtest spin` | loops forever with the CPU busy | firmware stuck in a loop |
+| `wdtest block` | suspends the main loop forever; the CPU idles and sleeps | a deadlock |
+| `wdtest fault` | writes to an invalid address | a crash |
+
+Procedure: `set watchdog 30`, power-cycle so it applies, then run each test. The serial port drops and the node
+should be back about 30 s later, with `get watchdog` showing `last reset: Watchdog` (a crash may reset at once
+with `CPU Lockup` or similar instead). For the receive watchdog, `set rx.watchdog 5` and move the radio to an
+unused frequency (`set freq`, reboot): it should reboot after 5 minutes and count `1 reboots`. Put both back
+afterwards and flash a normal build.
+
 ## Settings file
 
 Both settings are kept in `/watchdog` on the node's filesystem, so they survive reboots and firmware

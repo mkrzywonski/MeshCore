@@ -1243,7 +1243,7 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
-  if (handleWatchdogCommand(command, reply)) return;
+  if (handleWatchdogCommand(sender_timestamp, command, reply)) return;
 
   // handle ACL related commands
   if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
