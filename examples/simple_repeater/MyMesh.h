@@ -163,6 +163,16 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   void checkClockSource(const mesh::Identity& id, uint32_t timestamp, char via);
   bool handleClockSourceCommand(const char* command, char* reply);
 
+  // hardware and receive watchdogs, see Watchdog.cpp
+  uint16_t wdt_secs, rxwdt_mins, rxwdt_reboots;
+  uint32_t rxwdt_last_count;
+  unsigned long rxwdt_last_rx;
+  void loadWatchdog();
+  bool saveWatchdog();
+  void startWatchdog();
+  void watchdogLoop();
+  bool handleWatchdogCommand(const char* command, char* reply);
+
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
   uint8_t handleLoginReq(const mesh::Identity& sender, const uint8_t* secret, uint32_t sender_timestamp, const uint8_t* data, bool is_flood);
   uint8_t handleAnonRegionsReq(const mesh::Identity& sender, uint32_t sender_timestamp, const uint8_t* data);

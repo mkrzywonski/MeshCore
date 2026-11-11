@@ -338,7 +338,7 @@ get|set allow.read.only on|off - room servers only; no effect on a repeater
 
 ```
 > help system
-system: reboot, poweroff, start ota, powersaving, adc.multiplier, log start|stop|erase
+system: reboot, poweroff, watchdog, rx.watchdog, start ota, powersaving, adc.multiplier, log start|stop|erase
 ```
 
 ```
@@ -349,6 +349,16 @@ reboot - restart the node
 ```
 > help poweroff
 poweroff - turn the node off (also: shutdown). Needs a button or power cycle to start
+```
+
+```
+> help watchdog
+get|set watchdog <30-3600 secs>|off - reset the chip if the firmware hangs this long (default 300). get: also why it last reset
+```
+
+```
+> help rx.watchdog
+get|set rx.watchdog <5-1440 mins>|off - reboot if no packet is received for this long. Busy sites only (default off)
 ```
 
 ```

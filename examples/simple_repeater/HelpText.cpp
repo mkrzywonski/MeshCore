@@ -102,6 +102,8 @@ static const HelpEntry entries[] = {
   { T_SYSTEM, 0, "reboot", "reboot", "restart the node" },
   { T_SYSTEM, 0, "poweroff", "poweroff", "turn the node off (also: shutdown). Needs a button or power cycle to start" },
   { T_SYSTEM, H_HIDDEN, "shutdown", "shutdown", "same as poweroff" },
+  { T_SYSTEM, 0, "watchdog", "get|set watchdog <30-3600 secs>|off", "reset the chip if the firmware hangs this long (default 300). get: also why it last reset" },
+  { T_SYSTEM, 0, "rx.watchdog", "get|set rx.watchdog <5-1440 mins>|off", "reboot if no packet is received for this long. Busy sites only (default off)" },
   { T_SYSTEM, 0, "start ota", "start ota", "turn on Bluetooth for a firmware update; the reply has its MAC. reboot cancels" },
   { T_SYSTEM, H_USB, "erase", "erase", "format the file system: deletes settings, keys and contacts" },
   { T_SYSTEM, 0, "powersaving", "powersaving [on|off]", "sleep between radio events" },

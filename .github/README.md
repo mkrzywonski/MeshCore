@@ -31,6 +31,14 @@ adverts, logins, admin messages, bot DMs) set the clock forward, within sane lim
 then gets the right time back on its own after a reboot, instead of restarting in 2024 and having its adverts
 ignored as stale. → [Trusted Clock Source](../docs/clock_source.md)
 
+### Watchdogs
+
+A repeater that hangs on a roof stays dead until someone climbs up. `set watchdog <secs>` (default 300) runs the
+chip's hardware watchdog: if the firmware stops, the chip resets and the repeater comes back by itself, and
+`get watchdog` shows `last reset: Watchdog`. `set rx.watchdog <mins>` (off by default, for busy sites) reboots it
+if no packet has been received for that long, which catches a radio that stopped receiving. nRF52 boards only
+for the hardware watchdog. → [Watchdogs](../docs/watchdog.md)
+
 ### `help` command
 
 `help` or `?` lists every command, grouped by topic (lora, timekeeping, routing, bot, ...). `help <topic>` lists a topic's
@@ -41,9 +49,10 @@ commands that only work over USB serial are left out. → [CLI Commands](../docs
 
 | Branch | Contents |
 |---|---|
-| **`deploy`** | All three features, merged. **Build from this branch.** |
+| **`deploy`** | All four features, merged. **Build from this branch.** |
 | `feature/repeater-bot` | The bot only |
 | `feature/clock-source` | The clock source only |
+| `feature/watchdog` | The watchdogs only |
 | `feature/repeater-help` | `help` only |
 | `main` | Upstream MeshCore, unchanged |
 
@@ -65,7 +74,7 @@ PLATFORMIO_BUILD_FLAGS="-D REPEATER_BOT=1" pio run -e RAK_4631_repeater
 # repeater with the bot, logging packets to serial for an MQTT observer (e.g. meshcoretomqtt)
 PLATFORMIO_BUILD_FLAGS="-D REPEATER_BOT=1 -D MESH_PACKET_LOGGING=1" pio run -e Heltec_v3_repeater
 
-# repeater without the bot (clock source and help are always included)
+# repeater without the bot (clock source, watchdogs and help are always included)
 pio run -e RAK_4631_repeater
 ```
 
