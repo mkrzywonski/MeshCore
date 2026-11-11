@@ -880,6 +880,9 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   dirty_contacts_expiry = 0;
   set_radio_at = revert_radio_at = 0;
   _logging = false;
+  wdt_secs = rxwdt_mins = rxwdt_reboots = 0;
+  rxwdt_last_count = 0;
+  rxwdt_last_rx = 0;
   region_load_active = false;
   recv_pkt_region = NULL;
 
@@ -950,6 +953,8 @@ void MyMesh::begin(FILESYSTEM *fs) {
   acl.load(_fs, self_id);
   // TODO: key_store.begin();
   region_map.load(_fs);
+  loadWatchdog();
+  startWatchdog();
 
   // establish default-scope
   {
@@ -1238,6 +1243,8 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
+  if (handleWatchdogCommand(command, reply)) return;
+
   // handle ACL related commands
   if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
     char* hex = &command[8];
@@ -1291,6 +1298,7 @@ void MyMesh::loop() {
   bridge.loop();
 #endif
 
+  watchdogLoop();
   mesh::Mesh::loop();
 
   if (next_flood_advert && millisHasNowPassed(next_flood_advert)) {

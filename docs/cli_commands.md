@@ -42,6 +42,36 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
+### Hardware watchdog (Repeater Only)
+**Usage:**
+- `get watchdog`
+- `set watchdog <seconds>`
+- `set watchdog off`
+
+**Parameters:**
+- `seconds`: 30-3600, or `0`/`off`
+
+**Default:** `300`
+
+**Note:** If the firmware stops running its main loop for this long (a hang, deadlock or crash), the chip resets and the repeater comes back by itself. `get watchdog` also shows why the node last reset (`Watchdog` after a watchdog reset). On nRF52 a running watchdog can't be stopped or changed, and it keeps running through `reboot`, so a new value takes effect after the next power-on or watchdog reset. Boards without support say so. See [Watchdogs](watchdog.md).
+
+---
+
+### Receive watchdog (Repeater Only)
+**Usage:**
+- `get rx.watchdog`
+- `set rx.watchdog <minutes>`
+- `set rx.watchdog off`
+
+**Parameters:**
+- `minutes`: 5-1440, or `0`/`off`
+
+**Default:** `off`
+
+**Note:** Reboots the repeater if it hasn't received a valid packet for this many minutes, which catches a radio that has stopped receiving while the rest of the firmware keeps running. Only turn it on at a site that always hears traffic. `get rx.watchdog` shows the time since the last packet and how many times it has rebooted the node. See [Watchdogs](watchdog.md).
+
+---
+
 ### Reset the clock and reboot
 **Usage:**
 - `clkreboot`

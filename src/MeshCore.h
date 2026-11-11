@@ -87,6 +87,13 @@ public:
 
   virtual bool handleCommand(const char* command, uint32_t sender_timestamp, char* reply) { return false; }
 
+  // Hardware watchdog (boards that have one override these). Once started it resets the chip unless
+  // feedWatchdog() is called more often than the timeout, and it can't be stopped or changed until the
+  // chip resets (on nRF52 it even survives a soft reboot).
+  virtual bool startWatchdog(uint32_t secs) { return false; }  // false: unsupported, or already running
+  virtual void feedWatchdog() { }
+  virtual uint32_t getWatchdogSecs() const { return 0; }       // timeout of the running watchdog, 0 = not running
+
   // Called from the example main loops. Lets a board feed its watchdog and
   // run periodic housekeeping. Default no-op.
   virtual void loop() { /* no op */ }
